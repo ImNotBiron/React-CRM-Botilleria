@@ -1,20 +1,16 @@
 import axios from "axios";
 
-const hostname = window.location.hostname;
-
-// Cuando estás desarrollando en el notebook
 const isLocalhost =
-  hostname === "localhost" ||
-  hostname === "127.0.0.1" ||
-  hostname === "";
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
 
-// Backend local (desarrollo en notebook)
+// Dev (PC local)
 const devURL = "http://localhost:3000/api";
 
-// Backend para tablet conectada al hotspot
-const hotspotURL = "http://192.168.0.41:3000/api";
+// Producción (usa el dominio automáticamente)
+const prodURL = "/api";
 
-export const API_URL = isLocalhost ? devURL : hotspotURL;
+export const API_URL = isLocalhost ? devURL : prodURL;
 
 console.log("🌐 Backend seleccionado:", API_URL);
 
@@ -24,3 +20,4 @@ const axiosClient = axios.create({
 });
 
 export default axiosClient;
+
