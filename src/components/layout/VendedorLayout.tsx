@@ -1,10 +1,10 @@
 import { Outlet } from "react-router-dom";
 import { Box } from "@mui/material";
-import { useThemeStore } from "../../store/themeStore";
+// import { useThemeStore } from "../../store/themeStore";
 
 export default function VendedorLayout() {
-  const mode = useThemeStore((s) => s.mode);
-  const toggleTheme = useThemeStore((s) => s.toggleTheme);
+  // const mode = useThemeStore((s) => s.mode);
+  // const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   return (
     <Box
