@@ -1,5 +1,9 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import IconButton from "@mui/material/IconButton";
+import { useThemeStore } from "../../store/themeStore";
 
 import {
   Box,
@@ -20,7 +24,8 @@ import {
   IconLayoutDashboard,
   IconPackage,
   IconShoppingCart,
-  IconLogout
+  IconLogout,
+  IconUsers,
 } from "@tabler/icons-react";
 
 import { useState } from "react";
@@ -29,15 +34,42 @@ import { useAuthStore } from "../../store/authStore";
 const drawerWidth = 230;
 
 const menuItems = [
-  { label: "Dashboard", path: "/", icon: <IconLayoutDashboard size={22} stroke={1.6} /> },
-  { label: "Productos", path: "/productos", icon: <IconPackage size={22} stroke={1.6} /> },
-  { label: "Ventas", path: "/ventas", icon: <IconShoppingCart size={22} stroke={1.6} /> }
+  {
+    label: "Dashboard",
+    path: "/",
+    icon: <IconLayoutDashboard size={22} stroke={1.6} />,
+  },
+  {
+    label: "Productos",
+    path: "/productos",
+    icon: <IconPackage size={22} stroke={1.6} />,
+  },
+  {
+    label: "Ventas",
+    path: "/ventas",
+    icon: <IconShoppingCart size={22} stroke={1.6} />,
+  },
+  {
+    label: "Usuarios",
+    path: "/usuarios",
+    icon: <IconUsers size={22} stroke={1.6} />,
+  },
 ];
 
 export default function Layout() {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+
+  // ⛔ PROTECCIÓN EXTRA:
+  // Si un vendedor intenta entrar por URL → lo sacamos
+  if (!user || user.tipo_usuario !== "admin") {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Modo Light/Dark
+  const mode = useThemeStore((s) => s.mode);
+  const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const openMenu = Boolean(anchorEl);
@@ -52,9 +84,9 @@ export default function Layout() {
   };
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#f5f5f9" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
 
-      {/* SIDEBAR PREMIUM */}
+      {/* SIDEBAR */}
       <Paper
         elevation={4}
         sx={{
@@ -65,7 +97,7 @@ export default function Layout() {
           left: 0,
           borderTopRightRadius: "26px",
           borderBottomRightRadius: "26px",
-          bgcolor: "white",
+          bgcolor: "background.paper",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -105,7 +137,7 @@ export default function Layout() {
           sx={{
             fontSize: "20px",
             fontWeight: 600,
-            color: "#333",
+            color: "text.primary",
             textAlign: "center",
           }}
         >
@@ -117,7 +149,7 @@ export default function Layout() {
           sx={{
             fontSize: "13px",
             fontWeight: 400,
-            color: "#888",
+            color: "text.secondary",
             mb: 5,
             textAlign: "center",
           }}
@@ -128,7 +160,9 @@ export default function Layout() {
         {/* MENÚ */}
         <List sx={{ width: "100%", mt: 2 }}>
           {menuItems.map((item) => {
-            const selected = location.pathname === item.path;
+            
+            // ✔ Usamos startsWith para seleccionar subrutas
+            const selected = location.pathname.startsWith(item.path);
 
             return (
               <ListItemButton
@@ -142,8 +176,8 @@ export default function Layout() {
                   px: 2,
                   mb: 1.3,
                   transition: "0.2s ease",
-                  bgcolor: selected ? "rgba(105,92,254,0.12)" : "transparent",
-                  "&:hover": { bgcolor: "rgba(105,92,254,0.08)" },
+                  bgcolor: selected ? "rgba(105,92,254,0.18)" : "transparent",
+                  "&:hover": { bgcolor: "rgba(105,92,254,0.10)" },
                 }}
               >
                 <ListItemIcon
@@ -200,39 +234,48 @@ export default function Layout() {
           minHeight: "100vh",
         }}
       >
-        {/* TOPBAR MINIMALISTA */}
+        {/* TOPBAR */}
         <AppBar
           elevation={1}
           position="fixed"
           sx={{
-            ml: `${drawerWidth + 20}px`,  
+            ml: `${drawerWidth + 20}px`,
             width: `calc(100% - ${drawerWidth + 20}px)`,
-            bgcolor: "#ffffffcc",
+            bgcolor: "background.paper",
             backdropFilter: "blur(10px)",
-            color: "#333",
+            color: "text.primary",
             borderRadius: "0 0 20px 20px",
             boxShadow: "0px 4px 12px rgba(0,0,0,0.05)",
           }}
         >
-          <Toolbar sx={{  display: "flex", justifyContent: "space-between" }}>
+          <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
             <Typography variant="h6" fontWeight={600} sx={{ color: "#695cfe" }}>
               CRM Botillería
             </Typography>
 
-            {/* Avatar + Menu */}
-           <Box
-  sx={{ display: "flex", alignItems: "center", cursor: "pointer" }}
-  onClick={handleOpenMenu}
->
-  <Avatar sx={{ bgcolor: "#695cfe", mr: 1 }}>
-    {(user?.nombre_usuario?.charAt(0) ?? "A").toUpperCase()}
-  </Avatar>
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              {/* DARK MODE */}
+              <IconButton onClick={toggleTheme} sx={{ mr: 2 }}>
+                {mode === "light" ? (
+                  <DarkModeIcon />
+                ) : (
+                  <LightModeIcon sx={{ color: "yellow" }} />
+                )}
+              </IconButton>
 
-  <Typography>{user?.nombre_usuario}</Typography>
+              {/* Avatar */}
+              <Box
+                sx={{ display: "flex", alignItems: "center", cursor: "pointer" }}
+                onClick={handleOpenMenu}
+              >
+                <Avatar sx={{ bgcolor: "#695cfe", mr: 1 }}>
+                  {(user?.nombre_usuario?.charAt(0) ?? "A").toUpperCase()}
+                </Avatar>
 
-  <ExpandMoreIcon sx={{ ml: 1 }} />
-</Box>
-
+                <Typography>{user?.nombre_usuario}</Typography>
+                <ExpandMoreIcon sx={{ ml: 1 }} />
+              </Box>
+            </Box>
 
             <Menu anchorEl={anchorEl} open={openMenu} onClose={handleCloseMenu}>
               <MenuItem onClick={handleLogout}>Cerrar sesión</MenuItem>
@@ -243,7 +286,7 @@ export default function Layout() {
         <Toolbar />
 
         {/* CONTENIDO */}
-        <Box sx={{ p: 4, pt: 6, flexGrow: 1, width: "100%"}}>
+        <Box sx={{ p: 4, pt: 6, flexGrow: 1, width: "100%" }}>
           <Outlet />
         </Box>
       </Box>

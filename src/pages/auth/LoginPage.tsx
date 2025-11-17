@@ -13,10 +13,14 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  useTheme,
 } from "@mui/material";
+
 import PersonIcon from "@mui/icons-material/Person";
 
 export default function LoginPage() {
+  const theme = useTheme();
+
   const [rut, setRut] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,6 +30,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const loginStore = useAuthStore();
 
+  // Chilean RUT formatter
   const formatRut = (value: string) => {
     let clean = value.replace(/[^\dkK]/g, "").toUpperCase();
     if (clean.length > 1) {
@@ -36,69 +41,47 @@ export default function LoginPage() {
     return clean;
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+  // LOGIN
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  console.log("Submit ejecutado con RUT:", rut);
-
-  if (!rut.trim()) {
-    setErrorMsg("Debe ingresar su RUT.");
-    setOpenError(true);
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    console.log("Llamando API login...");
-    const data = await authApi.login(rut);
-
-    console.log("DATA COMPLETA:", data);
-console.log("TOKEN RECIBIDO:", data.token);
-console.log("USUARIO RECIBIDO:", data.user);
-
-
-    console.log("Respuesta del backend:", data);
-
-    if (!data.user || !data.token) {
-      setErrorMsg(data.message || "RUT no autorizado.");
+    if (!rut.trim()) {
+      setErrorMsg("Debe ingresar su RUT.");
       setOpenError(true);
-      setLoading(false);
       return;
     }
 
-    // GUARDAR SESIÓN
-    console.log("Guardando sesión en Zustand...");
-    loginStore.login(data.user, data.token);
+    try {
+      setLoading(true);
+      const data = await authApi.login(rut);
 
-    // REDIRECCIÓN SEGÚN TIPO
-    if (data.user.tipo_usuario === "admin") {
-      console.log("tipo_usuario: "+data.user.tipo_usuario+"| Redirigiendo a /");
-      navigate("/");
-    } else if (data.user.tipo_usuario === "vendedor") {
-      console.log("Redirigiendo a /carrito");
-      navigate("/carrito");
-    } else {
-      setErrorMsg("Este usuario no tiene acceso a esta aplicación.");
+      if (!data.user || !data.token) {
+        setErrorMsg(data.message || "RUT no autorizado.");
+        setOpenError(true);
+        setLoading(false);
+        return;
+      }
+
+      loginStore.login(data.user, data.token);
+
+      if (data.user.tipo_usuario === "admin") navigate("/");
+      else if (data.user.tipo_usuario === "vendedor") navigate("/carrito");
+      else {
+        setErrorMsg("Este usuario no tiene acceso.");
+        setOpenError(true);
+        loginStore.logout();
+      }
+    } catch (error: any) {
+      setErrorMsg(error.response?.data?.message || "Error de conexión.");
       setOpenError(true);
-      loginStore.logout();
+    } finally {
+      setLoading(false);
     }
-
-  } catch (error: any) {
-    const msg =
-      error.response?.data?.message || "Error de conexión con el servidor.";
-    setErrorMsg(msg);
-    setOpenError(true);
-  } finally {
-    setLoading(false);
-  }
-};
-
-
+  };
 
   return (
     <>
-      {/* Fondo principal */}
+      {/* FONDO DINÁMICO */}
       <Box
         sx={{
           position: "fixed",
@@ -107,12 +90,17 @@ console.log("USUARIO RECIBIDO:", data.user);
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          background: "linear-gradient(135deg, #dcd9ff 0%, #f4f3ff 100%)",
           px: 2,
           animation: "fadeIn 0.6s ease",
+
+          // 🎨 GRADIENTE CONTROLADO POR EL THEME:
+          background:
+            theme.palette.mode === "light"
+              ? "linear-gradient(135deg, #e9e7ff 0%, #f4f3ff 100%)"
+              : "linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 100%)",
         }}
       >
-        {/* Tarjeta */}
+        {/* CARD DEL LOGIN */}
         <Paper
           elevation={10}
           sx={{
@@ -122,21 +110,32 @@ console.log("USUARIO RECIBIDO:", data.user);
             borderRadius: 4,
             textAlign: "center",
             animation: "growIn 0.45s ease",
+            bgcolor: "background.paper",
+            color: "text.primary",
           }}
         >
+          {/* TÍTULO */}
           <Typography
             variant="h4"
             fontWeight={700}
             mb={3}
-            sx={{ color: "#695cfe", letterSpacing: "1px" }}
+            sx={{ 
+              letterSpacing: "1px",
+              color: theme.palette.primary.main
+            }}
           >
             CRM Botillería
           </Typography>
 
-          <Typography variant="body1" mb={4} sx={{ color: "#555" }}>
+          <Typography
+            variant="body1"
+            mb={4}
+            sx={{ color: "text.secondary" }}
+          >
             Ingrese su RUT para continuar
           </Typography>
 
+          {/* FORM */}
           <form onSubmit={handleSubmit}>
             <TextField
               label="RUT"
@@ -150,12 +149,11 @@ console.log("USUARIO RECIBIDO:", data.user);
                     <PersonIcon color="primary" />
                   </InputAdornment>
                 ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": { borderRadius: "12px" },
+                sx: { borderRadius: "12px" },
               }}
             />
 
+            {/* BOTÓN LOGIN */}
             <Button
               type="submit"
               variant="contained"
@@ -167,9 +165,8 @@ console.log("USUARIO RECIBIDO:", data.user);
                 borderRadius: "12px",
                 fontWeight: 700,
                 fontSize: "16px",
-                backgroundColor: "#695cfe",
-                "&:hover": { backgroundColor: "#5a4ee3" },
-                boxShadow: "0 4px 15px rgba(105, 92, 254, 0.35)",
+                textTransform: "none",
+                // El color AHORA viene del theme
               }}
             >
               {loading ? (
@@ -182,7 +179,7 @@ console.log("USUARIO RECIBIDO:", data.user);
         </Paper>
       </Box>
 
-      {/* Snackbar de error */}
+      {/* SNACKBAR */}
       <Snackbar
         open={openError}
         autoHideDuration={4000}
@@ -195,7 +192,7 @@ console.log("USUARIO RECIBIDO:", data.user);
           onClose={() => setOpenError(false)}
           sx={{
             width: "100%",
-            bgcolor: "#ff4d4d",
+            bgcolor: theme.palette.error.main,
             color: "white",
             fontWeight: 600,
           }}
@@ -204,7 +201,7 @@ console.log("USUARIO RECIBIDO:", data.user);
         </Alert>
       </Snackbar>
 
-      {/* Animaciones CSS */}
+      {/* ANIMACIONES */}
       <style>
         {`
           @keyframes fadeIn {

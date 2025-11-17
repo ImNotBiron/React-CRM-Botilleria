@@ -14,7 +14,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Typography, InputAdornment, Switch, FormControlLabel
+  Typography,
+  InputAdornment,
+  Switch,
+  FormControlLabel
 } from "@mui/material";
 
 import {
@@ -24,22 +27,22 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 
+import { useThemeStore } from "../../store/themeStore";
 import { productosApi } from "../../api/productosApi";
 
-const formatCLP = (value: number) => {
-  return new Intl.NumberFormat("es-CL", {
+const formatCLP = (value: number) =>
+  new Intl.NumberFormat("es-CL", {
     style: "currency",
     currency: "CLP",
     minimumFractionDigits: 0,
   }).format(value);
-};
-
 
 export default function ProductosPage() {
+  const mode = useThemeStore((s) => s.mode);
+
   const [productos, setProductos] = useState([]);
   const [busqueda, setBusqueda] = useState("");
 
-  // Modal
   const [openModal, setOpenModal] = useState(false);
   const [form, setForm] = useState({
     id: null,
@@ -51,30 +54,21 @@ export default function ProductosPage() {
     distribuidora_producto: "",
   });
 
-  // =============================
   // Cargar productos
-  // =============================
   const cargarProductos = async () => {
     const data = await productosApi.getAll();
     setProductos(data);
-    
   };
 
   useEffect(() => {
     cargarProductos();
   }, []);
 
-  // =============================
-  // Filtro de búsqueda
-  // =============================
   const productosFiltrados = productos.filter((p: any) =>
     p.nombre_producto.toLowerCase().includes(busqueda.toLowerCase()) ||
     p.codigo_producto.toLowerCase().includes(busqueda.toLowerCase())
   );
 
-  // =============================
-  // Modal abrir/cerrar
-  // =============================
   const handleOpenModal = () => setOpenModal(true);
 
   const handleCloseModal = () => {
@@ -90,15 +84,10 @@ export default function ProductosPage() {
     });
   };
 
-  // =============================
-  // Guardar (crear o editar)
-  // =============================
   const handleSave = async () => {
     if (form.id) {
-      // editar
       await productosApi.update(form.id, form);
     } else {
-      // crear
       await productosApi.create(form);
     }
 
@@ -106,17 +95,11 @@ export default function ProductosPage() {
     cargarProductos();
   };
 
-  // =============================
-  // Editar producto
-  // =============================
   const handleEdit = (p: any) => {
     setForm(p);
     setOpenModal(true);
   };
 
-  // =============================
-  // Eliminar producto
-  // =============================
   const handleDelete = async (id: number) => {
     if (!confirm("¿Seguro que desea eliminar este producto?")) return;
 
@@ -126,21 +109,21 @@ export default function ProductosPage() {
 
   return (
     <Box sx={{ p: 0, pt: 2, flexGrow: 1, width: "100%" }}>
-
-      {/* Controles */}
+      {/* CONTROLES */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <TextField
           variant="outlined"
           placeholder="Buscar producto..."
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-         InputProps={{
-  startAdornment: (
-    <InputAdornment position="start">
-      <IconSearch size={18} style={{ opacity: 0.6 }} />
-    </InputAdornment>
-  ),
-}}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <IconSearch size={18} style={{ opacity: 0.6 }} />
+              </InputAdornment>
+            ),
+            sx: { borderRadius: "12px" },
+          }}
           sx={{ width: 280 }}
         />
 
@@ -149,11 +132,9 @@ export default function ProductosPage() {
           onClick={handleOpenModal}
           startIcon={<IconPlus size={18} />}
           sx={{
-            bgcolor: "#695cfe",
             borderRadius: "10px",
             textTransform: "none",
             fontWeight: 600,
-            "&:hover": { bgcolor: "#5a4ee3" },
           }}
         >
           Agregar producto
@@ -161,9 +142,23 @@ export default function ProductosPage() {
       </Box>
 
       {/* TABLA */}
-      <Paper sx={{ width: "100%", borderRadius: "16px", overflow: "hidden" }}>
+      <Paper
+        sx={{
+          width: "100%",
+          borderRadius: "16px",
+          overflow: "hidden",
+          bgcolor: "background.paper",
+        }}
+      >
         <Table sx={{ width: "100%", tableLayout: "fixed" }}>
-          <TableHead sx={{ bgcolor: "#f3f1ff" }}>
+          <TableHead
+            sx={{
+              bgcolor:
+                mode === "dark"
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(105,92,254,0.12)",
+            }}
+          >
             <TableRow>
               <TableCell><strong>ID</strong></TableCell>
               <TableCell><strong>Código</strong></TableCell>
@@ -177,7 +172,16 @@ export default function ProductosPage() {
 
           <TableBody>
             {productosFiltrados.map((p: any) => (
-              <TableRow key={p.id}>
+              <TableRow key={p.id}
+                sx={{
+                  "&:hover": {
+                    bgcolor:
+                      mode === "dark"
+                        ? "rgba(255,255,255,0.06)"
+                        : "rgba(0,0,0,0.04)",
+                  },
+                }}
+              >
                 <TableCell>{p.id}</TableCell>
                 <TableCell>{p.codigo_producto}</TableCell>
                 <TableCell>{p.nombre_producto}</TableCell>
@@ -199,192 +203,190 @@ export default function ProductosPage() {
         </Table>
       </Paper>
 
-      {/* ========================= */}
-      {/* MODAL AGREGAR / EDITAR */}
-      {/* ========================= */}
-     <Dialog
-  open={openModal}
-  onClose={handleCloseModal}
-  maxWidth="md"
-  fullWidth
-  PaperProps={{
-    sx: {
-      borderRadius: "18px",
-      p: 1,
-      boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-    },
-  }}
->
-  <DialogTitle
-    sx={{
-      fontWeight: 700,
-      fontSize: "22px",
-      pb: 0,
-      color: "#3b3b3b",
-    }}
-  >
-    {form.id ? "Editar producto" : "Agregar producto"}
-  </DialogTitle>
-
-  <Typography sx={{ color: "#777", px: 3, mt: 0, mb: 2 }}>
-    Ingrese los datos del producto correctamente.
-  </Typography>
-
-  <DialogContent sx={{ mt: 1, pb: 1 }}>
-    <Box
-      sx={{
-        display: "grid",
-        gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-        gap: 3,
-        mt: 1,
-      }}
-    >
-      {/* Código */}
-      <TextField
-        label="Código del producto"
-        value={form.codigo_producto}
-        onChange={(e) => setForm({ ...form, codigo_producto: e.target.value })}
+      {/* MODAL */}
+      <Dialog
+        open={openModal}
+        onClose={handleCloseModal}
+        maxWidth="md"
         fullWidth
-        placeholder="(automático si queda vacío)"
-        InputProps={{
-          sx: { borderRadius: "12px" },
+        PaperProps={{
+          sx: {
+            borderRadius: "18px",
+            p: 1,
+            bgcolor: "background.paper",
+          },
         }}
-      />
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            fontSize: "22px",
+            pb: 0,
+            color: "text.primary",
+          }}
+        >
+          {form.id ? "Editar producto" : "Agregar producto"}
+        </DialogTitle>
 
-      {/* Nombre */}
-      <TextField
-        label="Nombre del producto"
-        value={form.nombre_producto}
-        onChange={(e) => setForm({ ...form, nombre_producto: e.target.value })}
-        fullWidth
-        InputProps={{ sx: { borderRadius: "12px" } }}
-      />
+        <Typography
+          sx={{
+            color: "text.secondary",
+            px: 3,
+            mt: 0,
+            mb: 2,
+          }}
+        >
+          Ingrese los datos del producto correctamente.
+        </Typography>
 
-      {/* Precio con formato CLP */}
-      <TextField
-        label="Precio"
-        type="text"
-        value={
-          form.precio_producto
-            ? new Intl.NumberFormat("es-CL", {
-                style: "currency",
-                currency: "CLP",
-                minimumFractionDigits: 0,
-              }).format(Number(form.precio_producto))
-            : ""
-        }
-        onChange={(e) => {
-          const raw = e.target.value.replace(/\D/g, ""); // solo números
-          setForm({ ...form, precio_producto: raw });
-        }}
-        fullWidth
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              $
-            </InputAdornment>
-          ),
-          sx: { borderRadius: "12px" },
-        }}
-      />
-
-      {/* Categoría */}
-      <TextField
-        label="Categoría"
-        value={form.categoria_producto}
-        onChange={(e) =>
-          setForm({ ...form, categoria_producto: e.target.value })
-        }
-        fullWidth
-        InputProps={{ sx: { borderRadius: "12px" } }}
-      />
-
-      {/* Distribuidora */}
-      <TextField
-        label="Distribuidora"
-        value={form.distribuidora_producto}
-        onChange={(e) =>
-          setForm({ ...form, distribuidora_producto: e.target.value })
-        }
-        fullWidth
-        InputProps={{ sx: { borderRadius: "12px" } }}
-      />
-
-      {/* Exento IVA */}
-      <Box sx={{ display: "flex", alignItems: "center", mt: 1 }}>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={form.exento_iva === 1}
+        <DialogContent sx={{ mt: 1, pb: 1 }}>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+              gap: 3,
+              mt: 1,
+            }}
+          >
+            {/* Código */}
+            <TextField
+              label="Código del producto"
+              value={form.codigo_producto}
               onChange={(e) =>
-                setForm({
-                  ...form,
-                  exento_iva: e.target.checked ? 1 : 0,
-                })
+                setForm({ ...form, codigo_producto: e.target.value })
               }
-              color="primary"
+              fullWidth
+              placeholder="(automático si queda vacío)"
+              InputProps={{ sx: { borderRadius: "12px" } }}
             />
-          }
-          label="Exento IVA"
-          sx={{ fontWeight: 600 }}
-        />
-      </Box>
-    </Box>
-  </DialogContent>
 
-  <DialogActions
-    sx={{
-      p: 3,
-      pt: 1,
-      display: "flex",
-      justifyContent: "space-between",
-    }}
-  >
-    <Button
-      onClick={handleCloseModal}
-      sx={{
-        textTransform: "none",
-        fontWeight: 600,
-        color: "#555",
-      }}
-    >
-      Cancelar
-    </Button>
+            {/* Nombre */}
+            <TextField
+              label="Nombre del producto"
+              value={form.nombre_producto}
+              onChange={(e) =>
+                setForm({ ...form, nombre_producto: e.target.value })
+              }
+              fullWidth
+              InputProps={{ sx: { borderRadius: "12px" } }}
+            />
 
-    <Button
-      variant="contained"
-      onClick={async () => {
-        // 👇 si no escribió el código → generarlo
-        if (!form.codigo_producto) {
-          const lastId = productos.length
-            ? Math.max(...productos.map((p: any) => p.id))
-            : 0;
+            {/* Precio */}
+            <TextField
+              label="Precio"
+              type="text"
+              value={
+                form.precio_producto
+                  ? new Intl.NumberFormat("es-CL", {
+                      style: "currency",
+                      currency: "CLP",
+                      minimumFractionDigits: 0,
+                    }).format(Number(form.precio_producto))
+                  : ""
+              }
+              onChange={(e) => {
+                const raw = e.target.value.replace(/\D/g, "");
+                setForm({ ...form, precio_producto: raw });
+              }}
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">$</InputAdornment>
+                ),
+                sx: { borderRadius: "12px" },
+              }}
+            />
 
-          const newCode = `P-${String(lastId + 1).padStart(5, "0")}`;
+            {/* Categoría */}
+            <TextField
+              label="Categoría"
+              value={form.categoria_producto}
+              onChange={(e) =>
+                setForm({ ...form, categoria_producto: e.target.value })
+              }
+              fullWidth
+              InputProps={{ sx: { borderRadius: "12px" } }}
+            />
 
-          form.codigo_producto = newCode;
-        }
+            {/* Distribuidora */}
+            <TextField
+              label="Distribuidora"
+              value={form.distribuidora_producto}
+              onChange={(e) =>
+                setForm({ ...form, distribuidora_producto: e.target.value })
+              }
+              fullWidth
+              InputProps={{ sx: { borderRadius: "12px" } }}
+            />
 
-        await handleSave();
-      }}
-      sx={{
-        bgcolor: "#695cfe",
-        px: 4,
-        py: 1,
-        borderRadius: "12px",
-        textTransform: "none",
-        fontSize: "15px",
-        fontWeight: 700,
-        "&:hover": { bgcolor: "#5a4ee3" },
-      }}
-    >
-      Guardar
-    </Button>
-  </DialogActions>
-</Dialog>
+            {/* Exento IVA */}
+            <Box sx={{ display: "flex", alignItems: "center", mt: 1 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.exento_iva === 1}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        exento_iva: e.target.checked ? 1 : 0,
+                      })
+                    }
+                    color="primary"
+                  />
+                }
+                label="Exento IVA"
+                sx={{ fontWeight: 600 }}
+              />
+            </Box>
+          </Box>
+        </DialogContent>
 
+        <DialogActions
+          sx={{
+            p: 3,
+            pt: 1,
+            display: "flex",
+            justifyContent: "space-between",
+          }}
+        >
+          <Button
+            onClick={handleCloseModal}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              color: "text.secondary",
+            }}
+          >
+            Cancelar
+          </Button>
 
+          <Button
+            variant="contained"
+            onClick={async () => {
+              if (!form.codigo_producto) {
+                const lastId = productos.length
+                  ? Math.max(...productos.map((p: any) => p.id))
+                  : 0;
 
+                const newCode = `P-${String(lastId + 1).padStart(5, "0")}`;
+                form.codigo_producto = newCode;
+              }
+
+              await handleSave();
+            }}
+            sx={{
+              px: 4,
+              py: 1,
+              borderRadius: "12px",
+              textTransform: "none",
+              fontSize: "15px",
+              fontWeight: 700,
+            }}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

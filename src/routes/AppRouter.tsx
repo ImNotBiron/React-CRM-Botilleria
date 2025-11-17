@@ -2,11 +2,12 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 
 import Layout from "../components/layout/Layout";               // Admin layout
-import VendedorLayout from "../components/layout/VendedorLayout"; // Nuevo layout para vendedor
+import VendedorLayout from "../components/layout/VendedorLayout"; // Vendedor layout
 
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import ProductosPage from "../pages/productos/ProductosPage";
 import VentasPage from "../pages/ventas/VentasPage";
+import UsuariosPage from "../pages/usuarios/UsuariosPage";
 import CarritoPage from "../pages/carrito/CarritoPage";
 
 import LoginPage from "../pages/auth/LoginPage";
@@ -15,14 +16,11 @@ export default function AppRouter() {
   const user = useAuthStore((state) => state.user);
   const isLoggedIn = user !== null;
 
-  console.log("Router detecta usuario:", user);
-  console.log("isLoggedIn:", isLoggedIn);
-
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* 🔐 RUTAS CUANDO NO HAY SESIÓN */}
+        {/* 🔐 SIN SESIÓN */}
         {!isLoggedIn && (
           <>
             <Route path="/login" element={<LoginPage />} />
@@ -30,15 +28,19 @@ export default function AppRouter() {
           </>
         )}
 
-        {/* 🔐 RUTAS CUANDO SÍ HAY SESIÓN */}
+        {/* 🔐 CON SESIÓN */}
         {isLoggedIn && (
           <>
             {/* 🟦 RUTAS PARA ADMIN */}
             {user.tipo_usuario === "admin" && (
               <Route element={<Layout />}>
                 <Route index element={<DashboardPage />} />
-                <Route path="productos" element={<ProductosPage />} />
-                <Route path="ventas" element={<VentasPage />} />
+
+                {/* RUTAS ABSOLUTAS */}
+                <Route path="/productos" element={<ProductosPage />} />
+                <Route path="/ventas" element={<VentasPage />} />
+                <Route path="/usuarios" element={<UsuariosPage />} />
+
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             )}
@@ -57,5 +59,3 @@ export default function AppRouter() {
     </BrowserRouter>
   );
 }
-
-
