@@ -112,37 +112,45 @@ export default function UsuariosPage() {
   // =======================
   // Guardar (crear o editar)
   // =======================
-  const handleSave = async () => {
-    if (!form.nombre_usuario.trim()) {
-      mostrarAlerta("Debe ingresar el nombre.", "warning");
+ const handleSave = async () => {
+  if (!form.nombre_usuario.trim()) {
+    mostrarAlerta("Debe ingresar el nombre.", "warning");
+    return;
+  }
+
+  if (!form.rut_usuario.trim()) {
+    mostrarAlerta("Debe ingresar el RUT.", "warning");
+    return;
+  }
+
+  // Normalizar RUT
+  const cleanRut = form.rut_usuario.replace(/[^\dkK]/g, "").toUpperCase();
+
+  if (editMode) {
+    if (!form.id) {
+      console.error("❌ Error: form.id es null al actualizar.");
       return;
     }
 
-    if (!form.rut_usuario.trim()) {
-      mostrarAlerta("Debe ingresar el RUT.", "warning");
-      return;
-    }
+    await usuariosApi.update(form.id as number, {
+      ...form,
+      rut_usuario: cleanRut,
+    });
 
-    // Normalizar RUT → guardar sin puntos
-    const cleanRut = form.rut_usuario.replace(/[^\dkK]/g, "").toUpperCase();
+    mostrarAlerta("Usuario actualizado.", "success");
+  } else {
+    await usuariosApi.create({
+      ...form,
+      rut_usuario: cleanRut,
+    });
 
-    if (editMode) {
-      await usuariosApi.update(form.id, {
-        ...form,
-        rut_usuario: cleanRut,
-      });
-      mostrarAlerta("Usuario actualizado.", "success");
-    } else {
-      await usuariosApi.create({
-        ...form,
-        rut_usuario: cleanRut,
-      });
-      mostrarAlerta("Usuario creado.", "success");
-    }
+    mostrarAlerta("Usuario creado.", "success");
+  }
 
-    handleCloseModal();
-    cargarUsuarios();
-  };
+  handleCloseModal();
+  cargarUsuarios();
+};
+
 
   // =======================
   // Activar / Desactivar

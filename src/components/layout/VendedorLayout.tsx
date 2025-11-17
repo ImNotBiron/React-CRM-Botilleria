@@ -1,7 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { Box, IconButton } from "@mui/material";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
-import LightModeIcon from "@mui/icons-material/LightMode";
+import { Box } from "@mui/material";
 import { useThemeStore } from "../../store/themeStore";
 
 export default function VendedorLayout() {
