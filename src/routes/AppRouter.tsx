@@ -9,6 +9,7 @@ import ProductosPage from "../pages/productos/ProductosPage";
 import VentasPage from "../pages/ventas/VentasPage";
 import UsuariosPage from "../pages/usuarios/UsuariosPage";
 import CarritoPage from "../pages/carrito/CarritoPage";
+import CajaAdminPage from "../pages/caja/cajaPage";
 
 import LoginPage from "../pages/auth/LoginPage";
 
@@ -40,6 +41,7 @@ export default function AppRouter() {
                 <Route path="/productos" element={<ProductosPage />} />
                 <Route path="/ventas" element={<VentasPage />} />
                 <Route path="/usuarios" element={<UsuariosPage />} />
+                <Route path="/caja" element={<CajaAdminPage />} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

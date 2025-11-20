@@ -26,6 +26,7 @@ import {
   IconShoppingCart,
   IconLogout,
   IconUsers,
+  IconCash,
 } from "@tabler/icons-react";
 
 import { useState } from "react";
@@ -38,6 +39,11 @@ const menuItems = [
     label: "Dashboard",
     path: "/",
     icon: <IconLayoutDashboard size={22} stroke={1.6} />,
+  },
+  {
+    label: "Caja",
+    path: "/caja",
+    icon: <IconCash size={22} stroke={1.6} />,
   },
   {
     label: "Productos",
@@ -61,13 +67,10 @@ export default function Layout() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
 
-  // ⛔ PROTECCIÓN EXTRA:
-  // Si un vendedor intenta entrar por URL → lo sacamos
   if (!user || user.tipo_usuario !== "admin") {
     return <Navigate to="/login" replace />;
   }
 
-  // Modo Light/Dark
   const mode = useThemeStore((s) => s.mode);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
@@ -79,14 +82,26 @@ export default function Layout() {
 
   const handleLogout = () => {
     logout();
-    localStorage.removeItem("crm-session");
     window.location.href = "/login";
   };
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+    // ✅ FIX 1: Forzar ancho de ventana completo (100vw) y posición absoluta
+    // Esto evita que el body o el root limiten el ancho.
+    <Box 
+      sx={{ 
+        position: "absolute", 
+        top: 0,
+        left: 0,
+        width: "100vw",       
+        minHeight: "100vh", 
+        bgcolor: "background.default",
+        overflowX: "hidden",  
+        display: "flex"       
+      }}
+    >
 
-      {/* SIDEBAR */}
+      {/* SIDEBAR (Fijo) */}
       <Paper
         elevation={4}
         sx={{
@@ -103,6 +118,7 @@ export default function Layout() {
           alignItems: "center",
           p: 3,
           boxShadow: "4px 0 20px rgba(0,0,0,0.05)",
+          zIndex: 1200,
         }}
       >
         {/* Logo */}
@@ -119,50 +135,22 @@ export default function Layout() {
             boxShadow: "0 4px 10px rgba(109,93,252,0.3)",
           }}
         >
-          <Typography
-            variant="h4"
-            sx={{
-              color: "white",
-              fontWeight: 600,
-              fontSize: "34px",
-              lineHeight: "34px",
-            }}
-          >
-            P
-          </Typography>
+          <Typography variant="h4" sx={{ color: "white", fontWeight: 600 }}>P</Typography>
         </Box>
 
-        {/* Título */}
-        <Typography
-          sx={{
-            fontSize: "20px",
-            fontWeight: 600,
-            color: "text.primary",
-            textAlign: "center",
-          }}
-        >
+        <Typography sx={{ fontSize: "20px", fontWeight: 600, color: "text.primary", textAlign: "center" }}>
           Botillería El Paraíso
         </Typography>
 
-        {/* Subtítulo */}
-        <Typography
-          sx={{
-            fontSize: "13px",
-            fontWeight: 400,
-            color: "text.secondary",
-            mb: 5,
-            textAlign: "center",
-          }}
-        >
+        <Typography sx={{ fontSize: "13px", fontWeight: 400, color: "text.secondary", mb: 5, textAlign: "center" }}>
           Administración
         </Typography>
 
-        {/* MENÚ */}
         <List sx={{ width: "100%", mt: 2 }}>
           {menuItems.map((item) => {
-            
-            // ✔ Usamos startsWith para seleccionar subrutas
-            const selected = location.pathname.startsWith(item.path);
+            const selected = item.path === "/" 
+                ? location.pathname === "/" 
+                : location.pathname.startsWith(item.path);
 
             return (
               <ListItemButton
@@ -180,29 +168,18 @@ export default function Layout() {
                   "&:hover": { bgcolor: "rgba(105,92,254,0.10)" },
                 }}
               >
-                <ListItemIcon
-                  sx={{
-                    color: "#6D79FF",
-                    minWidth: 36,
-                    "& svg": { fontSize: "1.4rem" },
-                  }}
-                >
+                <ListItemIcon sx={{ color: "#6D79FF", minWidth: 36 }}>
                   {item.icon}
                 </ListItemIcon>
-
-                <ListItemText
-                  primary={item.label}
-                  primaryTypographyProps={{
-                    fontWeight: selected ? 600 : 500,
-                    fontSize: "15px",
-                  }}
+                <ListItemText 
+                  primary={item.label} 
+                  primaryTypographyProps={{ fontWeight: selected ? 600 : 500, fontSize: "15px" }} 
                 />
               </ListItemButton>
             );
           })}
         </List>
 
-        {/* Botón Salir */}
         <Box sx={{ mt: "auto", width: "100%" }}>
           <ListItemButton
             onClick={handleLogout}
@@ -229,23 +206,28 @@ export default function Layout() {
         sx={{
           flexGrow: 1,
           ml: `${drawerWidth}px`,
+          // ✅ FIX 2: Usar 100vw menos el ancho del sidebar. Esto asegura que ocupe TODO el resto.
+          width: `calc(100vw - ${drawerWidth}px)`, 
+          minHeight: "100vh",
           display: "flex",
           flexDirection: "column",
-          minHeight: "100vh",
         }}
       >
-        {/* TOPBAR */}
+        {/* TOPBAR FLOTANTE */}
         <AppBar
-          elevation={1}
+          elevation={0}
           position="fixed"
           sx={{
-            ml: `${drawerWidth + 20}px`,
-            width: `calc(100% - ${drawerWidth + 20}px)`,
+            // ✅ FIX 3: Anclaje exacto para centrado y ancho
+            width: `calc(100vw - ${drawerWidth + 32}px)`, // 100vw - sidebar - márgenes
+            left: `${drawerWidth + 16}px`, // Pegado a la derecha del sidebar + margen
+            top: 16,
             bgcolor: "background.paper",
-            backdropFilter: "blur(10px)",
             color: "text.primary",
-            borderRadius: "0 0 20px 20px",
-            boxShadow: "0px 4px 12px rgba(0,0,0,0.05)",
+            backdropFilter: "blur(10px)",
+            borderRadius: "16px",
+            boxShadow: "0px 4px 20px rgba(0,0,0,0.05)",
+            right: "auto"
           }}
         >
           <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -254,25 +236,15 @@ export default function Layout() {
             </Typography>
 
             <Box sx={{ display: "flex", alignItems: "center" }}>
-              {/* DARK MODE */}
               <IconButton onClick={toggleTheme} sx={{ mr: 2 }}>
-                {mode === "light" ? (
-                  <DarkModeIcon />
-                ) : (
-                  <LightModeIcon sx={{ color: "yellow" }} />
-                )}
+                {mode === "light" ? <DarkModeIcon /> : <LightModeIcon sx={{ color: "yellow" }} />}
               </IconButton>
 
-              {/* Avatar */}
-              <Box
-                sx={{ display: "flex", alignItems: "center", cursor: "pointer" }}
-                onClick={handleOpenMenu}
-              >
+              <Box sx={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={handleOpenMenu}>
                 <Avatar sx={{ bgcolor: "#695cfe", mr: 1 }}>
                   {(user?.nombre_usuario?.charAt(0) ?? "A").toUpperCase()}
                 </Avatar>
-
-                <Typography>{user?.nombre_usuario}</Typography>
+                <Typography sx={{ fontWeight: 500 }}>{user?.nombre_usuario}</Typography>
                 <ExpandMoreIcon sx={{ ml: 1 }} />
               </Box>
             </Box>
@@ -283,10 +255,10 @@ export default function Layout() {
           </Toolbar>
         </AppBar>
 
-        <Toolbar />
+        <Toolbar sx={{ mb: 2 }} /> 
 
-        {/* CONTENIDO */}
-        <Box sx={{ p: 4, pt: 6, flexGrow: 1, width: "100%" }}>
+        {/* CONTENIDO PÁGINAS */}
+        <Box sx={{ p: 3, width: "100%", boxSizing: "border-box" }}>
           <Outlet />
         </Box>
       </Box>
