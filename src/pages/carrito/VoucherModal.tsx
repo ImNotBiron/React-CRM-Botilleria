@@ -1,6 +1,5 @@
 import { Dialog, DialogContent, DialogActions, Button, Box, Typography, Divider } from "@mui/material";
 import PrintIcon from "@mui/icons-material/Print";
-import CloseIcon from "@mui/icons-material/Close";
 import { useRef } from "react";
 
 // Tipos de datos que necesitamos para pintar el voucher
