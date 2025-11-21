@@ -23,6 +23,9 @@ import {
   FormControl,
   InputLabel,
   Tooltip,
+  Chip,
+  Divider,
+  Alert // Importamos Alert para el mensaje dentro del modal
 } from "@mui/material";
 
 import {
@@ -30,7 +33,8 @@ import {
   IconSearch,
   IconPencil,
   IconTrash,
-  IconDiscount2
+  IconDiscount2,
+  IconAlertTriangle // Icono de advertencia
 } from "@tabler/icons-react";
 
 import { useThemeStore } from "../../store/themeStore";
@@ -60,6 +64,10 @@ export default function ProductosPage() {
   // Modal Ofertas
   const [openOfferModal, setOpenOfferModal] = useState(false);
 
+  // ✅ Modal Eliminar (Nuevo)
+  const [openDeleteModal, setOpenDeleteModal] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
   // Formulario Principal (Producto)
   const [form, setForm] = useState({
     id: null,
@@ -69,7 +77,6 @@ export default function ProductosPage() {
     exento_iva: 0,
     id_categoria: "",
     id_proveedor_preferido: "",
-    // Campos de Stock
     stock: 0,
     stock_minimo: 5,
   });
@@ -187,10 +194,23 @@ export default function ProductosPage() {
     cargarDatos(); 
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("¿Eliminar producto?")) return;
-    await productosApi.remove(id);
-    cargarDatos();
+  // ✅ NUEVA LÓGICA DE ELIMINAR (MODAL)
+  const handleOpenDelete = (id: number) => {
+    setDeleteId(id);
+    setOpenDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteId) {
+      try {
+        await productosApi.remove(deleteId);
+        cargarDatos();
+      } catch (error) {
+        console.error("Error al eliminar", error);
+      }
+    }
+    setOpenDeleteModal(false);
+    setDeleteId(null);
   };
 
   return (
@@ -223,17 +243,24 @@ export default function ProductosPage() {
       <Paper sx={{ width: "100%", borderRadius: "16px", overflow: "hidden", bgcolor: "background.paper" }}>
         <Table sx={{ width: "100%", tableLayout: "fixed" }}>
           
-          {/* --- HEAD ORIGINAL --- */}
-          <TableHead sx={{ bgcolor: mode === "dark" ? "rgba(255,255,255,0.08)" : "rgba(105,92,254,0.12)" }}>
+          {/* --- HEAD --- */}
+          <TableHead
+            sx={{
+              bgcolor: "background.paper", 
+              borderBottom: "2px solid",
+              borderColor: "divider",
+            }}
+          >
             <TableRow>
-              <TableCell sx={{width: 60}}><strong>ID</strong></TableCell>
-              <TableCell><strong>Código</strong></TableCell>
-              <TableCell><strong>Nombre</strong></TableCell>
-              <TableCell sx={{width: 90}}><strong>Stock</strong></TableCell> {/* Agregué Stock aquí para que no se pierda */}
-              <TableCell><strong>Categoría</strong></TableCell>
-              <TableCell><strong>Proveedor</strong></TableCell>
-              <TableCell align="right"><strong>Precio Venta</strong></TableCell>
-              <TableCell align="center" sx={{width: 160}}><strong>Acciones</strong></TableCell>
+              <TableCell sx={{ width: '50px', fontWeight: 600, color: 'text.secondary', py: 1 }}>ID</TableCell>
+              <TableCell sx={{ width: '90px', fontWeight: 600, color: 'text.secondary', whiteSpace: 'nowrap', py: 1 }}>Código</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: 'text.secondary', py: 1 }}>Nombre</TableCell>
+              <TableCell sx={{ width: '80px', fontWeight: 600, color: 'text.secondary', whiteSpace: 'nowrap', py: 1 }}>Stock</TableCell>
+              <TableCell sx={{ width: '110px', fontWeight: 600, color: 'text.secondary', whiteSpace: 'nowrap', py: 1 }}>Categoría</TableCell>
+              <TableCell sx={{ width: '140px', fontWeight: 600, color: 'text.secondary', whiteSpace: 'nowrap', py: 1 }}>Proveedor</TableCell>
+              <TableCell align="right" sx={{ width: '100px', fontWeight: 600, color: 'text.secondary', whiteSpace: 'nowrap', py: 1 }}>Precio Venta</TableCell>
+              <TableCell align="center" sx={{ width: '60px', fontWeight: 600, color: 'text.secondary', whiteSpace: 'nowrap', py: 1 }}>Oferta</TableCell>
+              <TableCell align="center" sx={{ width: '100px', fontWeight: 600, color: 'text.secondary', py: 1 }}>Acciones</TableCell>
             </TableRow>
           </TableHead>
 
@@ -245,47 +272,49 @@ export default function ProductosPage() {
 
               return (
                 <TableRow key={p.id} hover>
-                  <TableCell>{p.id}</TableCell>
-                  <TableCell>{p.codigo_producto}</TableCell>
-                  <TableCell sx={{fontWeight: 600}}>{p.nombre_producto}</TableCell>
+                  <TableCell sx={{ py: 0.5 }}>{p.id}</TableCell>
+                  <TableCell sx={{ py: 0.5, fontSize: '0.85rem' }}>{p.codigo_producto}</TableCell>
                   
-                  {/* COLUMNA STOCK CON COLOR */}
-                  <TableCell sx={{ fontWeight: 'bold', color: stockBajo ? 'error.main' : 'text.primary' }}>
+                  <TableCell sx={{ py: 0.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.nombre_producto}
+                  </TableCell>
+
+                  <TableCell sx={{ py: 0.5, fontWeight: 'bold', color: stockBajo ? 'error.main' : 'text.primary' }}>
                      {p.stock}
                   </TableCell>
 
-                  <TableCell>{p.categoria_producto || "-"}</TableCell>
-                  <TableCell>{p.distribuidora_producto || "-"}</TableCell>
+                  <TableCell sx={{ py: 0.5, fontSize: '0.85rem' }}>{p.categoria_producto || "-"}</TableCell>
+                  <TableCell sx={{ py: 0.5, fontSize: '0.85rem' }}>{p.distribuidora_producto || "-"}</TableCell>
                   
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ py: 0.5, fontWeight: 600 }}>
                     {formatCLP(Number(p.precio_producto))}
                   </TableCell>
                   
-                  <TableCell align="center">
-                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                        
-                        {/* BOTÓN OFERTA */}
-                        <Tooltip title={tieneOferta ? `Oferta: ${formatCLP(p.precio_mayorista)} x ${p.cantidad_mayorista}u` : "Crear Oferta Mayorista"}>
-                            <IconButton 
-                                onClick={() => handleOpenOffer(p)}
-                                color={tieneOferta ? "success" : "default"}
-                                sx={{ 
-                                    bgcolor: tieneOferta ? (mode==='dark' ? 'rgba(46, 125, 50, 0.2)' : '#e8f5e9') : 'transparent',
-                                    mr: 1
-                                }}
-                            >
-                                <IconDiscount2 size={20} stroke={1.6} />
-                            </IconButton>
+                  <TableCell align="center" sx={{ py: 0.5 }}>
+                     {tieneOferta ? (
+                        <Tooltip title={`Oferta: ${formatCLP(p.precio_mayorista)} x ${p.cantidad_mayorista}u`}>
+                           <IconButton size="small" color="success" onClick={() => handleOpenOffer(p)}>
+                              <IconDiscount2 size={18} />
+                           </IconButton>
                         </Tooltip>
+                     ) : (
+                        <Tooltip title="Crear Oferta">
+                           <IconButton size="small" sx={{ opacity: 0.3 }} onClick={() => handleOpenOffer(p)}>
+                              <IconDiscount2 size={18} />
+                           </IconButton>
+                        </Tooltip>
+                     )}
+                  </TableCell>
 
-                        {/* EDITAR */}
-                        <IconButton color="primary" onClick={() => handleEdit(p)}>
-                            <IconPencil size={20} stroke={1.6} />
+                  <TableCell align="center" sx={{ py: 0.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                        <IconButton color="primary" size="small" onClick={() => handleEdit(p)}>
+                            <IconPencil size={18} />
                         </IconButton>
-
-                        {/* ELIMINAR */}
-                        <IconButton color="error" onClick={() => handleDelete(p.id)}>
-                            <IconTrash size={20} stroke={1.6} />
+                        
+                        {/* ✅ BOTÓN ELIMINAR AHORA ABRE MODAL */}
+                        <IconButton color="error" size="small" onClick={() => handleOpenDelete(p.id)}>
+                            <IconTrash size={18} />
                         </IconButton>
                     </Box>
                   </TableCell>
@@ -309,7 +338,6 @@ export default function ProductosPage() {
             
             <TextField label="Precio Venta" value={form.precio_producto} onChange={(e) => setForm({ ...form, precio_producto: e.target.value.replace(/\D/g, "") })} fullWidth InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, sx: { borderRadius: "12px" } }} />
 
-            {/* STOCK */}
             <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField 
                     label="Stock Actual" 
@@ -384,6 +412,44 @@ export default function ProductosPage() {
         <DialogActions sx={{ p: 2, justifyContent: 'center' }}>
             <Button onClick={() => setOpenOfferModal(false)} color="inherit">Cancelar</Button>
             <Button variant="contained" color="success" onClick={handleSaveOffer}>Aplicar Oferta</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ✅ 3. MODAL DE CONFIRMACIÓN DE ELIMINAR (NUEVO) */}
+      <Dialog 
+        open={openDeleteModal} 
+        onClose={() => setOpenDeleteModal(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: "16px", p: 1 } }}
+      >
+        <DialogContent sx={{ textAlign: 'center', pt: 3 }}>
+            <Box sx={{ 
+                width: 60, height: 60, borderRadius: '50%', bgcolor: '#ffebee', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                mx: 'auto', mb: 2 
+            }}>
+                <IconAlertTriangle size={32} color="#d32f2f" />
+            </Box>
+            <Typography variant="h6" fontWeight={700} gutterBottom>
+                ¿Eliminar producto?
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+                Esta acción borrará el producto permanentemente del inventario.
+            </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, justifyContent: 'center', gap: 1 }}>
+            <Button onClick={() => setOpenDeleteModal(false)} color="inherit" sx={{ fontWeight: 600 }}>
+                Cancelar
+            </Button>
+            <Button 
+                onClick={handleConfirmDelete} 
+                variant="contained" 
+                color="error" 
+                sx={{ borderRadius: "8px", fontWeight: 700, px: 3 }}
+            >
+                Sí, Eliminar
+            </Button>
         </DialogActions>
       </Dialog>
 

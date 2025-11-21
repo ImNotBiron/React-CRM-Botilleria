@@ -21,103 +21,120 @@ export const VoucherModal = ({ open, onClose, datosVenta }: VoucherProps) => {
 
   if (!datosVenta) return null;
 
-  // =============================
-  // GENERADOR TEXTO 57mm + DOBLE COPIA
-  // =============================
+  const fmt = (n: number) => new Intl.NumberFormat("es-CL").format(n);
+
+  // ===========================================================
+  // 1. GENERADOR DE TEXTO PLANO PARA IMPRESORA TÉRMICA (57mm)
+  // ===========================================================
   const generarTextoVoucher57mm = (venta: any) => {
-    const fmt = (n: number) => new Intl.NumberFormat("es-CL").format(n);
+    const ANCHO_PAPEL = 32; // Caracteres por línea (ajustar a 32 o 48 según impresora)
+    
+    // Funciones de formato de texto
+    const centrar = (str: string) => {
+      const espacios = Math.max(0, Math.floor((ANCHO_PAPEL - str.length) / 2));
+      return " ".repeat(espacios) + str + "\n";
+    };
+    
+    const lineaPar = (izq: string, der: string) => {
+      const espacios = Math.max(0, ANCHO_PAPEL - izq.length - der.length);
+      return izq + " ".repeat(espacios) + der + "\n";
+    };
 
-    const line = (txt = "") => txt.padEnd(32, " ") + "\n";
-    const sep = "-".repeat(32) + "\n";
+    const separador = "-".repeat(ANCHO_PAPEL) + "\n";
 
-    let out = "";
-    out += line("BOTILLERÍA EL PARAISO");
-    out += line("Santo Domingo 2557");
-    out += sep;
-    out += line(`Folio: #${venta.id_venta}`);
-    out += line(`Fecha: ${venta.fecha}`);
-    out += line(`Vendedor: ${venta.vendedor}`);
-    out += sep;
+    let ticket = "";
+
+    // CABECERA
+    ticket += centrar("BOTILLERIA EL PARAISO");
+    ticket += centrar("Santo Domingo 2557");
+    ticket += separador;
+    ticket += `Folio: #${venta.id_venta}\n`;
+    ticket += `Fecha: ${venta.fecha}\n`;
+    ticket += `Vend:  ${venta.vendedor}\n`;
+    ticket += separador;
+
+    // DETALLE
+    ticket += "CANT DESCRIPCION          TOTAL\n";
+    ticket += separador;
 
     venta.items.forEach((item: any) => {
-      const nombre = item.nombre_producto + (item.es_promo ? " (P)" : "");
-      const total = (item.precio_final ?? item.precio_producto) * item.cantidad;
-
-      out += `${item.cantidad} x ${nombre}\n`;
-      out += line(`$${fmt(total)}`);
+      const precioUnit = item.precio_final ?? item.precio_producto;
+      const totalItem = precioUnit * item.cantidad;
+      
+      // Nombre producto recortado si es muy largo
+      const nombre = (item.nombre_producto + (item.es_promo ? "(P)" : "")).substring(0, 18);
+      
+      // Formato: "2  x Coca Cola...      $2.000"
+      const izq = `${item.cantidad} x ${nombre}`;
+      const der = `$${fmt(totalItem)}`;
+      
+      ticket += lineaPar(izq, der);
     });
 
-    out += sep;
-    out += line(`TOTAL: $${fmt(venta.total)}`);
-    out += sep;
+    ticket += separador;
 
-    out += "Formas de pago:\n";
+    // TOTALES
+    ticket += lineaPar("TOTAL A PAGAR:", `$${fmt(venta.total)}`);
+    ticket += separador;
+
+    // FORMAS DE PAGO
+    ticket += "Pagado con:\n";
     venta.pagos.forEach((p: any) => {
-      out += line(`- ${p.tipo}: $${fmt(p.monto)}`);
+      ticket += lineaPar(`- ${p.tipo}`, `$${fmt(p.monto)}`);
     });
 
-    out += sep;
-    out += line("¡Gracias por su compra!");
-    out += "\n\n\n";
+    // PIE DE PÁGINA
+    ticket += "\n";
+    ticket += centrar("¡GRACIAS POR SU COMPRA!");
+    ticket += centrar("Copia Cliente");
+    ticket += "\n\n"; // Espacio para corte
 
-    // 👉 Doble copia
-    return out + out;
+    return ticket;
   };
 
-  // =============================
-  // IMPRESIÓN RAWBT (Silent Mode)
-  // =============================
-const handlePrintRawBT = () => {
-  console.log("Intent RAWBT ejecutado (NO-SILENT)");
+  // ===========================================================
+  // 2. IMPRESIÓN TÉRMICA (Usando App RawBT)
+  // ===========================================================
+  const handlePrintRawBT = () => {
+    const textoTicket = generarTextoVoucher57mm(datosVenta);
+    
+    // Codificamos en Base64 para evitar problemas con tildes o caracteres especiales en la URL
+    const base64Data = btoa(unescape(encodeURIComponent(textoTicket)));
+    
+    // Esquema URL oficial de RawBT
+    const url = `rawbt:base64,${base64Data}`;
 
-  const text = generarTextoVoucher57mm(datosVenta);
+    // Abrimos la app externa
+    window.location.href = url;
+  };
 
-  // RAWBT FREE (modo interactivo)
-  const url = `rawbt://print/text?data=${encodeURIComponent(text)}`;
-
-  // Abre la app RAWBT con su UI
-  window.open(url, "_system");
-};
-
-
-
-  // =============================
-  // IMPRESIÓN NAVEGADOR (Admin)
-  // =============================
-  const handlePrint = () => {
+  // ===========================================================
+  // 3. IMPRESIÓN ESTÁNDAR (Navegador / PDF)
+  // ===========================================================
+  const handlePrintWeb = () => {
     window.print();
   };
 
-  const fmt = (n: number) => new Intl.NumberFormat("es-CL").format(n);
-
   return (
     <>
+      {/* ESTILOS PARA WINDOW.PRINT (Solo PDF Web) */}
       <style>
         {`
           @media print {
-            body * {
-              visibility: hidden;
-            }
-            #area-impresion, #area-impresion * {
-              visibility: visible;
-            }
+            body * { visibility: hidden; }
+            #area-impresion, #area-impresion * { visibility: visible; }
             #area-impresion {
-              position: absolute;
-              left: 0;
-              top: 0;
-              width: 100%;
-              margin: 0;
-              padding: 0;
+              position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0;
             }
-            .no-print {
-              display: none !important;
-            }
+            .no-print { display: none !important; }
           }
         `}
       </style>
 
       <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth scroll="body">
         <DialogContent sx={{ p: 0, bgcolor: "white" }}>
+          
+          {/* VISTA PREVIA EN PANTALLA (HTML) */}
           <Box
             id="area-impresion"
             ref={voucherRef}
@@ -136,15 +153,9 @@ const handlePrintRawBT = () => {
             <Divider sx={{ my: 1, borderStyle: "dashed" }} />
 
             <Box textAlign="left">
-              <Typography variant="caption" display="block">
-                <strong>Folio:</strong> #{datosVenta.id_venta}
-              </Typography>
-              <Typography variant="caption" display="block">
-                <strong>Fecha:</strong> {datosVenta.fecha}
-              </Typography>
-              <Typography variant="caption" display="block">
-                <strong>Atendido por:</strong> {datosVenta.vendedor}
-              </Typography>
+              <Typography variant="caption" display="block"><strong>Folio:</strong> #{datosVenta.id_venta}</Typography>
+              <Typography variant="caption" display="block"><strong>Fecha:</strong> {datosVenta.fecha}</Typography>
+              <Typography variant="caption" display="block"><strong>Vendedor:</strong> {datosVenta.vendedor}</Typography>
             </Box>
 
             <Divider sx={{ my: 1, borderStyle: "dashed" }} />
@@ -161,11 +172,11 @@ const handlePrintRawBT = () => {
                 <tbody>
                   {datosVenta.items.map((item: any, i: number) => (
                     <tr key={i}>
-                      <td>{item.cantidad}</td>
+                      <td style={{ verticalAlign: 'top' }}>{item.cantidad}</td>
                       <td style={{ paddingRight: 5 }}>
                         {item.nombre_producto} {item.es_promo ? "(P)" : ""}
                       </td>
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right", verticalAlign: 'top' }}>
                         ${fmt((item.precio_final ?? item.precio_producto) * item.cantidad)}
                       </td>
                     </tr>
@@ -177,18 +188,12 @@ const handlePrintRawBT = () => {
             <Divider sx={{ my: 1, borderStyle: "dashed" }} />
 
             <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
-              <Typography variant="body2" fontWeight="bold">
-                TOTAL A PAGAR:
-              </Typography>
-              <Typography variant="h6" fontWeight="bold">
-                ${fmt(datosVenta.total)}
-              </Typography>
+              <Typography variant="body2" fontWeight="bold">TOTAL:</Typography>
+              <Typography variant="h6" fontWeight="bold">${fmt(datosVenta.total)}</Typography>
             </Box>
 
             <Box textAlign="left" mt={1}>
-              <Typography variant="caption" fontWeight="bold">
-                FORMAS DE PAGO:
-              </Typography>
+              <Typography variant="caption" fontWeight="bold">FORMAS DE PAGO:</Typography>
               {datosVenta.pagos.map((p: any, idx: number) => (
                 <Typography key={idx} variant="caption" display="block">
                   - {p.tipo}: ${fmt(p.monto)}
@@ -197,39 +202,35 @@ const handlePrintRawBT = () => {
             </Box>
 
             <Divider sx={{ my: 2, borderStyle: "dashed" }} />
-
-            <Typography variant="caption" display="block">
-              ¡GRACIAS POR SU PREFERENCIA!
-            </Typography>
-            <Typography variant="caption" display="block">
-              Conserve este comprobante.
-            </Typography>
+            <Typography variant="caption" display="block">¡GRACIAS POR SU PREFERENCIA!</Typography>
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ p: 2, bgcolor: "#f5f5f5" }} className="no-print">
+        {/* BOTONES DE ACCIÓN */}
+        <DialogActions sx={{ p: 2, bgcolor: "#f5f5f5", display: 'flex', gap: 1 }} className="no-print">
           <Button onClick={onClose} color="inherit">
             Cerrar
           </Button>
 
-          {/* Impresión RAWBT Térmica (Silent Mode) */}
+          {/* BOTÓN PRINCIPAL (TABLET / RAWBT) */}
           <Button
             onClick={handlePrintRawBT}
             variant="contained"
             startIcon={<PrintOutlinedIcon />}
-            sx={{ bgcolor: "green", "&:hover": { bgcolor: "darkgreen" } }}
+            color="success"
+            sx={{ flexGrow: 1, fontWeight: 'bold' }}
           >
-            Imprimir Térmica
+            IMPRIMIR TÉRMICA
           </Button>
 
-          {/* Impresión Navegador */}
+          {/* BOTÓN SECUNDARIO (PC / PDF) */}
           <Button
-            onClick={handlePrint}
-            variant="contained"
+            onClick={handlePrintWeb}
+            variant="outlined"
             startIcon={<PrintIcon />}
-            sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" } }}
+            sx={{ color: 'text.secondary', borderColor: 'divider' }}
           >
-            Imprimir Navegador
+            PDF
           </Button>
         </DialogActions>
       </Dialog>

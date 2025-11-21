@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Box,
   Paper,
@@ -28,7 +28,7 @@ import LightModeIcon from "@mui/icons-material/LightMode";
 import LocalOfferIcon from '@mui/icons-material/LocalOffer'; 
 import { useThemeStore } from "../../store/themeStore";
 
-import { IconTrash, IconPlus, IconMinus, IconLogout } from "@tabler/icons-react";
+import { IconTrash, IconPlus, IconMinus, IconLogout, IconAlertTriangle } from "@tabler/icons-react";
 
 import { productosApi } from "../../api/productosApi";
 import { ventasApi } from "../../api/ventasApi";
@@ -84,8 +84,6 @@ export default function CarritoPage() {
   const [openPromoScanner, setOpenPromoScanner] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [carrito, setCarrito] = useState<CartItem[]>([]);
-  
-  // ✅ ESTADO PARA EL VUELTO
   const [vuelto, setVuelto] = useState(0); 
 
   // Voucher
@@ -102,67 +100,94 @@ export default function CarritoPage() {
   const [nuevoPagoTipo, setNuevoPagoTipo] = useState<MetodoPago>("EFECTIVO");
   const [nuevoPagoMonto, setNuevoPagoMonto] = useState("");
 
+  // ✅ NUEVO: Estados para Modal Eliminar
+  const [openDelete, setOpenDelete] = useState(false);
+  const [indexToDelete, setIndexToDelete] = useState<number | null>(null);
+
   const [alerta, setAlerta] = useState({
     open: false,
     mensaje: "",
     tipo: "warning" as TipoAlerta,
   });
 
+  // REF PARA EL INPUT DEL ESCÁNER (Para mantener el foco)
+  const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Función para forzar el foco
+  const enfocarScanner = () => {
+    if (barcodeInputRef.current) {
+        barcodeInputRef.current.focus();
+    }
+  };
+
+  // MANTENER FOCO SIEMPRE
+  useEffect(() => {
+    // Agregamos openDelete a la lista de modales que pausan el foco
+    if (!openPromoScanner && !openCantidad && !openPago && !openVoucher && !openDelete) {
+      const timer = setTimeout(enfocarScanner, 150); 
+      return () => clearTimeout(timer);
+    }
+  }, [openPromoScanner, openCantidad, openPago, openVoucher, openDelete, carrito]);
+
+  const handleInputBlur = () => {
+      if (!openPromoScanner && !openCantidad && !openPago && !openVoucher && !openDelete) {
+          setTimeout(() => {
+              if (document.activeElement === document.body) {
+                  enfocarScanner();
+              }
+          }, 200);
+      }
+  };
+
+  const handleBackgroundClick = () => {
+     if (!openPromoScanner && !openCantidad && !openPago && !openVoucher && !openDelete) {
+        enfocarScanner();
+     }
+  };
+
   const mostrarAlerta = (mensaje: string, tipo: TipoAlerta = "warning") => {
     setAlerta({ open: true, mensaje, tipo });
   };
 
-  // =================================================================
-  // 🧠 CEREBRO DE PRECIOS (Lógica Mayorista)
-  // =================================================================
+  // Lógica Mayorista
   const recalcularOfertas = (items: CartItem[]): CartItem[] => {
     return items.map(item => {
         if (item.es_promo) return item;
-
         const cantMinima = item.cantidad_mayorista || 0;
         const precioOferta = item.precio_mayorista || 0;
 
         if (cantMinima > 0 && item.cantidad >= cantMinima && precioOferta > 0) {
-            return {
-                ...item,
-                precio_final: precioOferta,
-                aplicando_mayorista: true
-            };
+            return { ...item, precio_final: precioOferta, aplicando_mayorista: true };
         } 
-        
         const { precio_final, aplicando_mayorista, ...resto } = item;
         return resto as CartItem;
     });
   };
 
-  // =================================================================
-  // ⚡ GESTIÓN CENTRALIZADA DEL CARRITO
-  // =================================================================
+  // Gestión Carrito
   const agregarAlCarrito = (input: CartItem | CartItem[]) => {
     const nuevosItems = Array.isArray(input) ? input : [input];
-
     setCarrito((prev) => {
       let nuevoEstado = [...prev];
-
       nuevosItems.forEach((nuevoItem) => {
          const precioBase = nuevoItem.precio_final ?? nuevoItem.precio_producto;
-
          const index = nuevoEstado.findIndex(i => {
-             const pExistente = i.precio_final ?? i.precio_producto;
-             if (i.es_promo) return i.id === nuevoItem.id && pExistente === precioBase;
+             const itemEsPromo = !!i.es_promo;
+             const nuevoEsPromo = !!nuevoItem.es_promo;
+             if (itemEsPromo !== nuevoEsPromo) return false;
+             if (itemEsPromo) {
+                 const pExistente = i.precio_final ?? i.precio_producto;
+                 return i.id === nuevoItem.id && pExistente === precioBase;
+             }
              return i.id === nuevoItem.id; 
          });
 
          if (index !== -1) {
-             nuevoEstado[index] = { 
-               ...nuevoEstado[index], 
-               cantidad: nuevoEstado[index].cantidad + nuevoItem.cantidad 
-             };
+             nuevoEstado[index] = { ...nuevoEstado[index], cantidad: nuevoEstado[index].cantidad + nuevoItem.cantidad };
          } else {
              nuevoEstado.push(nuevoItem);
          }
       });
-
       return recalcularOfertas(nuevoEstado);
     });
   };
@@ -176,12 +201,14 @@ export default function CarritoPage() {
       const producto: Producto = await productosApi.getByCodigo(codigo.trim());
       if (!producto) {
         mostrarAlerta("Producto no encontrado", "info");
+        setCodigo(""); 
         return;
       }
       agregarAlCarrito({ ...producto, cantidad: 1 });
       setCodigo("");
     } catch (error) {
       mostrarAlerta("Error al buscar producto", "error");
+      setCodigo("");
     }
   };
 
@@ -194,12 +221,8 @@ export default function CarritoPage() {
     setCarrito((prev) => {
         const nuevoEstado = [...prev];
         const nuevaCant = nuevoEstado[index].cantidad + delta;
-        
-        if (nuevaCant <= 0) {
-             nuevoEstado[index].cantidad = 1;
-        } else {
-             nuevoEstado[index].cantidad = nuevaCant;
-        }
+        if (nuevaCant <= 0) nuevoEstado[index].cantidad = 1;
+        else nuevoEstado[index].cantidad = nuevaCant;
         return recalcularOfertas(nuevoEstado);
     });
   };
@@ -207,52 +230,41 @@ export default function CarritoPage() {
   const handleIncrement = (index: number) => modificarCantidad(index, 1);
   const handleDecrement = (index: number) => modificarCantidad(index, -1);
 
-  const handleEliminar = (index: number) => {
-    if (!confirm("¿Eliminar este producto del carrito?")) return;
-    setCarrito((prev) => {
-        const nuevoEstado = prev.filter((_, i) => i !== index);
-        return recalcularOfertas(nuevoEstado);
-    });
+  // ✅ NUEVA LÓGICA ELIMINAR (Abre Modal)
+  const handleEliminarClick = (index: number) => {
+    setIndexToDelete(index);
+    setOpenDelete(true);
   };
 
-  // ==========================
-  // TOTALES
-  // ==========================
-  const totalExento = useMemo(() =>
-    carrito.reduce((acc, item) => {
+  // ✅ CONFIRMAR ELIMINACIÓN
+  const handleConfirmDelete = () => {
+    if (indexToDelete !== null) {
+        setCarrito((prev) => {
+            const nuevoEstado = prev.filter((_, i) => i !== indexToDelete);
+            return recalcularOfertas(nuevoEstado);
+        });
+        setIndexToDelete(null);
+    }
+    setOpenDelete(false);
+  };
+
+  // Totales
+  const totalExento = useMemo(() => carrito.reduce((acc, item) => {
       const precio = item.precio_final ?? item.precio_producto;
       return item.exento_iva === 1 ? acc + precio * item.cantidad : acc;
-    }, 0),
-  [carrito]);
-
-  const totalAfecto = useMemo(() =>
-    carrito.reduce((acc, item) => {
+    }, 0), [carrito]);
+  const totalAfecto = useMemo(() => carrito.reduce((acc, item) => {
       const precio = item.precio_final ?? item.precio_producto;
       return item.exento_iva === 0 ? acc + precio * item.cantidad : acc;
-    }, 0),
-  [carrito]);
-
+    }, 0), [carrito]);
   const totalGeneral = totalAfecto + totalExento;
   const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
   const saldoRestante = totalGeneral - totalPagado;
-  const totalNoEfectivo = useMemo(() =>
-    pagos.filter((p) => p.tipo !== "EFECTIVO" && p.tipo !== "GIRO").reduce((acc, p) => acc + p.monto, 0),
-  [pagos]);
+  const totalNoEfectivo = useMemo(() => pagos.filter((p) => p.tipo !== "EFECTIVO" && p.tipo !== "GIRO").reduce((acc, p) => acc + p.monto, 0), [pagos]);
 
-  // ==========================
-  // MODALES AUXILIARES
-  // ==========================
-  const abrirModalCantidad = (item: CartItem) => {
-    setItemSeleccionado(item);
-    setCantidadInput(String(item.cantidad));
-    setOpenCantidad(true);
-  };
-
-  const cerrarModalCantidad = () => {
-    setOpenCantidad(false);
-    setItemSeleccionado(null);
-    setCantidadInput("");
-  };
+  // Modales
+  const abrirModalCantidad = (item: CartItem) => { setItemSeleccionado(item); setCantidadInput(String(item.cantidad)); setOpenCantidad(true); };
+  const cerrarModalCantidad = () => { setOpenCantidad(false); setItemSeleccionado(null); setCantidadInput(""); };
 
   const handleTeclaCantidad = (valor: string) => {
     if (valor === "DEL") return setCantidadInput((v) => v.slice(0, -1));
@@ -262,10 +274,7 @@ export default function CarritoPage() {
 
   const confirmarCantidad = () => {
     const nueva = parseInt(cantidadInput);
-    if (isNaN(nueva) || nueva <= 0) {
-      mostrarAlerta("Cantidad inválida", "warning");
-      return;
-    }
+    if (isNaN(nueva) || nueva <= 0) { mostrarAlerta("Cantidad inválida", "warning"); return; }
     if (itemSeleccionado) {
         setCarrito(prev => {
              const nuevoEstado = prev.map(i => {
@@ -278,19 +287,8 @@ export default function CarritoPage() {
     cerrarModalCantidad();
   };
 
-  // PAGO 
-  const abrirModalPago = () => {
-    if (!carrito.length) return mostrarAlerta("No hay productos", "info");
-    setOpenPago(true);
-  };
-  
-  const cerrarModalPago = () => { 
-    setOpenPago(false); 
-    setPagos([]); 
-    setNuevoPagoMonto(""); 
-    setNuevoPagoTipo("EFECTIVO"); 
-    setVuelto(0); // ✅ Reseteamos vuelto al cerrar
-  };
+  const abrirModalPago = () => { if (!carrito.length) return mostrarAlerta("No hay productos", "info"); setOpenPago(true); };
+  const cerrarModalPago = () => { setOpenPago(false); setPagos([]); setNuevoPagoMonto(""); setNuevoPagoTipo("EFECTIVO"); setVuelto(0); };
   
   const agregarPago = () => {
      const montoIngresado = parseInt(nuevoPagoMonto);
@@ -299,24 +297,20 @@ export default function CarritoPage() {
      const esEfectivo = ["EFECTIVO", "GIRO"].includes(nuevoPagoTipo);
      const esCreditoDebito = ["DEBITO", "CREDITO", "TRANSFERENCIA"].includes(nuevoPagoTipo);
 
-     // Validación Exentos (Cigarros)
      if (esCreditoDebito && totalNoEfectivo + montoIngresado > totalAfecto) {
         mostrarAlerta("⛔ Las ventas con productos EXENTOS solo se realizan con Efectivo o Giro", "error");
         return;
      }
 
-     // ✅ LÓGICA DE VUELTO MEJORADA
      let montoARegistrar = montoIngresado;
 
      if (montoIngresado > saldoRestante) {
         if (esEfectivo) {
-            // Si es efectivo, calculamos vuelto y guardamos solo lo que falta
             const vueltoCalculado = montoIngresado - saldoRestante;
-            setVuelto(vueltoCalculado); // Guardar estado para mostrar
-            montoARegistrar = saldoRestante; // Registrar solo el saldo pendiente
+            setVuelto(vueltoCalculado); 
+            montoARegistrar = saldoRestante;
             mostrarAlerta(`💰 Entregar vuelto: ${formatCLP(vueltoCalculado)}`, "success");
         } else {
-            // Si es tarjeta, no permitimos pagar de más
             return mostrarAlerta("El monto excede el saldo restante", "warning");
         }
      }
@@ -337,6 +331,7 @@ export default function CarritoPage() {
       pagos,
       items: carrito.map((i) => ({
         id_producto: i.id,
+        nombre_producto: i.nombre_producto,
         cantidad: i.cantidad,
         precio_unitario: i.precio_final ?? i.precio_producto, 
         exento_iva: i.exento_iva,
@@ -345,7 +340,6 @@ export default function CarritoPage() {
 
     try {
       const res = await ventasApi.create(payload);
-      
       const datosParaVoucher = {
          id_venta: res.id_venta,
          fecha: new Date().toLocaleString("es-CL"),
@@ -354,10 +348,8 @@ export default function CarritoPage() {
          total: totalGeneral,
          pagos: [...pagos]
       };
-
       setDatosUltimaVenta(datosParaVoucher);
       setOpenVoucher(true);
-
       mostrarAlerta("Venta registrada con éxito", "success");
       setCarrito([]);
       cerrarModalPago();
@@ -367,7 +359,10 @@ export default function CarritoPage() {
   };
 
   return (
-    <Box sx={{ width: "100%", mt: 1 }}>
+    <Box 
+        sx={{ width: "100%", mt: 1 }}
+        onClick={handleBackgroundClick} 
+    >
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
         <IconButton onClick={toggleTheme}>
           {mode === "light" ? <DarkModeIcon sx={{ color: "text.primary" }} /> : <LightModeIcon sx={{ color: "yellow" }} />}
@@ -383,16 +378,17 @@ export default function CarritoPage() {
             
             <form onSubmit={handleAgregarPorCodigo}>
               <TextField
-                autoFocus
+                inputRef={barcodeInputRef} 
+                onBlur={handleInputBlur} 
+                autoFocus 
                 fullWidth
                 label="Código de barras"
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value)}
                 InputProps={{ sx: { borderRadius: "12px" } }}
+                inputProps={{ inputMode: 'none', autoComplete: 'off' }} 
               />
-              <Button type="submit" variant="contained" fullWidth sx={{ mt: 2, py: 1.2, borderRadius: "12px", textTransform: "none" }}>
-                Agregar
-              </Button>
+              <Button type="submit" style={{ display: 'none' }}>Agregar</Button>
             </form>
 
             <Button 
@@ -466,6 +462,8 @@ export default function CarritoPage() {
               <TableBody>
                 {carrito.map((item, index) => {
                    const precioReal = item.precio_final ?? item.precio_producto;
+                   const esPromo = !!item.es_promo;
+                   
                    return (
                   <TableRow key={`${item.id}-${index}`} sx={{ "&:hover": { bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)" } }}>
                     <TableCell>
@@ -484,11 +482,15 @@ export default function CarritoPage() {
                     </TableCell>
                     <TableCell align="center">
                       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
-                        <IconButton size="small" onClick={() => handleDecrement(index)}><IconMinus size={16} /></IconButton>
-                        <Button size="small" variant="outlined" sx={{ minWidth: 40, borderRadius: "10px", px: 1, textTransform: "none" }} onClick={() => abrirModalCantidad(item)}>
+                        <IconButton size="small" onClick={() => handleDecrement(index)} disabled={esPromo}>
+                            <IconMinus size={16} />
+                        </IconButton>
+                        <Button size="small" variant="outlined" sx={{ minWidth: 40, borderRadius: "10px", px: 1, textTransform: "none" }} onClick={() => abrirModalCantidad(item)} disabled={esPromo}>
                           {item.cantidad}
                         </Button>
-                        <IconButton size="small" onClick={() => handleIncrement(index)}><IconPlus size={16} /></IconButton>
+                        <IconButton size="small" onClick={() => handleIncrement(index)} disabled={esPromo}>
+                            <IconPlus size={16} />
+                        </IconButton>
                       </Box>
                     </TableCell>
                     <TableCell align="right">
@@ -508,7 +510,9 @@ export default function CarritoPage() {
                     <TableCell align="right">{formatCLP(precioReal * item.cantidad)}</TableCell>
                     <TableCell align="center">{item.exento_iva === 1 ? "Sí" : "No"}</TableCell>
                     <TableCell align="center">
-                      <IconButton color="error" size="small" onClick={() => handleEliminar(index)}><IconTrash size={18} /></IconButton>
+                      <IconButton color="error" size="small" onClick={() => handleEliminarClick(index)}>
+                        <IconTrash size={18} />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 )})}
@@ -523,12 +527,7 @@ export default function CarritoPage() {
         </Box>
       </Box>
 
-      {/* MODAL PROMO SCANNER */}
-      <PromoScannerModal 
-        open={openPromoScanner} 
-        onClose={() => setOpenPromoScanner(false)} 
-        onPromoAdd={handlePromoAdd} 
-      />
+      <PromoScannerModal open={openPromoScanner} onClose={() => setOpenPromoScanner(false)} onPromoAdd={handlePromoAdd} />
 
       {/* MODAL CANTIDAD */}
       <Dialog open={openCantidad} onClose={cerrarModalCantidad} maxWidth="xs" fullWidth>
@@ -578,39 +577,33 @@ export default function CarritoPage() {
                <Typography fontWeight={700}>Total venta</Typography><Typography fontWeight={700}>{formatCLP(totalGeneral)}</Typography>
              </Box>
            </Box>
-           <Typography fontWeight={600} mb={1}>Pagos</Typography>
-           <Box sx={{ display: "flex", gap: 2, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
+           <Box sx={{ display: "flex", gap: 2, mb: 2, mt: 3, flexWrap: "wrap", alignItems: "center" }}>
              <Select value={nuevoPagoTipo} onChange={(e) => setNuevoPagoTipo(e.target.value as MetodoPago)} size="small" sx={{ minWidth: 140 }}>
                {METODOS_PAGO.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
              </Select>
-             <TextField label="Monto" size="small" value={nuevoPagoMonto} onChange={(e) => setNuevoPagoMonto(e.target.value.replace(/\D/g, ""))} InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
+             <TextField 
+                label="Monto" 
+                size="small" 
+                type="tel" 
+                value={nuevoPagoMonto ? formatCLP(Number(nuevoPagoMonto)) : ""}
+                onChange={(e) => {
+                    const valorLimpio = e.target.value.replace(/\D/g, "");
+                    setNuevoPagoMonto(valorLimpio);
+                }} 
+                InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }} 
+             />
              <Button variant="outlined" onClick={() => {
                 if (nuevoPagoTipo === "EFECTIVO" || nuevoPagoTipo === "GIRO") setNuevoPagoMonto(String(totalGeneral - totalPagado));
                 else setNuevoPagoMonto(String(totalAfecto - totalNoEfectivo));
              }}>Usar total</Button>
              <Button variant="outlined" onClick={agregarPago}>Agregar pago</Button>
            </Box>
-
-           {/* ✅ VISUALIZACIÓN DE VUELTO GIGANTE */}
+           
            {vuelto > 0 && (
-             <Paper 
-                elevation={0} 
-                sx={{ 
-                    mt: 2, 
-                    mb: 2,
-                    p: 2, 
-                    bgcolor: 'success.light', 
-                    color: 'success.contrastText',
-                    textAlign: 'center',
-                    borderRadius: 2,
-                }}
-             >
-                <Typography variant="subtitle2" fontWeight="bold" textTransform="uppercase">
-                    Vuelto a Entregar
-                </Typography>
-                <Typography variant="h3" fontWeight={800}>
-                    {formatCLP(vuelto)}
-                </Typography>
+             <Paper elevation={0} sx={{ mt: 2, mb: 2, p: 2, bgcolor: 'success.light', color: 'success.contrastText', textAlign: 'center', borderRadius: 2 }}>
+                <Typography variant="subtitle2" fontWeight="bold" textTransform="uppercase">Vuelto a Entregar</Typography>
+                <Typography variant="h3" fontWeight={800}>{formatCLP(vuelto)}</Typography>
              </Paper>
            )}
 
@@ -633,35 +626,45 @@ export default function CarritoPage() {
         </DialogActions>
       </Dialog>
 
-      <VoucherModal 
-        open={openVoucher}
-        onClose={() => setOpenVoucher(false)}
-        datosVenta={datosUltimaVenta}
-      />
+      <VoucherModal open={openVoucher} onClose={() => setOpenVoucher(false)} datosVenta={datosUltimaVenta} />
 
-      {/* ALERTAS PERSONALIZADAS */}
-      <Snackbar 
-        open={alerta.open} 
-        autoHideDuration={4000} // Un poco más de tiempo para leer
-        onClose={() => setAlerta({ ...alerta, open: false })} 
-        anchorOrigin={{ vertical: "top", horizontal: "center" }} // Arriba al centro es más visible
+      {/* ✅ MODAL ELIMINAR */}
+      <Dialog 
+        open={openDelete} 
+        onClose={() => setOpenDelete(false)} 
+        maxWidth="xs" 
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
       >
-        <Alert 
-          onClose={() => setAlerta({ ...alerta, open: false })} 
-          severity={alerta.tipo} 
-          variant="filled" // "filled" hace que el color sea sólido e intenso
-          sx={{ 
-            width: "100%",
-            boxShadow: 6,
-            // Si es error, aumentamos tamaño de letra y padding
-            ...(alerta.tipo === 'error' && {
-                fontSize: '1.1rem',
-                fontWeight: 'bold',
-                py: 2, // Más alto
-                px: 4  // Más ancho
-            })
-          }}
-        >
+        <DialogContent sx={{ textAlign: 'center', pt: 3 }}>
+             <Box sx={{ 
+                width: 64, height: 64, borderRadius: '50%', bgcolor: '#ffebee', color: '#d32f2f',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2
+             }}>
+                <IconAlertTriangle size={36} stroke={1.5} />
+             </Box>
+             <Typography variant="h6" fontWeight={700} gutterBottom>
+                ¿Eliminar producto?
+             </Typography>
+             <Typography variant="body2" color="text.secondary">
+                Se quitará este producto del carrito.
+             </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, justifyContent: 'center', gap: 1 }}>
+             <Button onClick={() => setOpenDelete(false)} color="inherit" sx={{ fontWeight: 600 }}>Cancelar</Button>
+             <Button 
+                onClick={handleConfirmDelete} 
+                variant="contained" 
+                color="error" 
+                sx={{ fontWeight: 700, px: 3, borderRadius: 2 }}
+             >
+                Sí, Eliminar
+             </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={alerta.open} autoHideDuration={4000} onClose={() => setAlerta({ ...alerta, open: false })} anchorOrigin={{ vertical: "top", horizontal: "center" }}>
+        <Alert onClose={() => setAlerta({ ...alerta, open: false })} severity={alerta.tipo} variant="filled" sx={{ width: "100%", boxShadow: 6 }}>
           {alerta.mensaje}
         </Alert>
       </Snackbar>

@@ -1,28 +1,30 @@
 import axiosClient from "./axiosClient";
 
 export const cajaApi = {
-  // Consultar si está abierta o cerrada
   getEstado: async () => {
     const res = await axiosClient.get("/caja/estado");
     return res.data;
   },
 
-  // Abrir turno
   abrir: async (monto_inicial: number, id_usuario: number) => {
-    const res = await axiosClient.post("/caja/abrir", { 
-        monto_inicial, 
-        id_usuario 
-    });
+    const res = await axiosClient.post("/caja/abrir", { monto_inicial, id_usuario });
     return res.data;
   },
 
-  // Cerrar turno (Arqueo)
-  cerrar: async (payload: { 
-      id_caja: number; 
-      monto_final_real: number; 
-      totales_sistema: any; 
-  }) => {
+  cerrar: async (payload: any) => {
     const res = await axiosClient.post("/caja/cerrar", payload);
     return res.data;
+  },
+
+  // Registrar Ingreso/Egreso
+  registrarMovimiento: async (data: {
+      id_caja: number;
+      tipo: 'INGRESO' | 'EGRESO';
+      monto: number;
+      comentario: string;
+      id_usuario: number;
+  }) => {
+      const res = await axiosClient.post("/caja/movimiento", data);
+      return res.data;
   }
 };
