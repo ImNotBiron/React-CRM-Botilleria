@@ -124,7 +124,7 @@ export default function LoginPage() {
               color: theme.palette.primary.main
             }}
           >
-            CRM Botillería
+            Botillería
           </Typography>
 
           <Typography

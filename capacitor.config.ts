@@ -5,8 +5,9 @@ const config: CapacitorConfig = {
   appName: 'CRM Botilleria',
   webDir: 'dist',
   server: {
+    url: "https://botilleriaelparaiso.cl",  
     cleartext: true,
-    androidScheme: "http",
+    androidScheme: "https",                
   }
 };
 
