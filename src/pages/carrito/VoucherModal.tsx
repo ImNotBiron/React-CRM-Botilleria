@@ -67,18 +67,19 @@ export const VoucherModal = ({ open, onClose, datosVenta }: VoucherProps) => {
   // =============================
   // IMPRESIÓN RAWBT (Silent Mode)
   // =============================
-  const handlePrintRawBT = () => {
-    const text = generarTextoVoucher57mm(datosVenta);
+const handlePrintRawBT = () => {
+  console.log("Intent RAWBT ejecutado (NO-SILENT)");
 
-    const intent =
-      `intent://print/#Intent;` +
-      `scheme=rawbt;` +
-      `package=ru.a402d.rawbtprinter;` +
-      `S.text=${encodeURIComponent(text)};` +
-      `end`;
+  const text = generarTextoVoucher57mm(datosVenta);
 
-    window.location.href = intent;
-  };
+  // RAWBT FREE (modo interactivo)
+  const url = `rawbt://print/text?data=${encodeURIComponent(text)}`;
+
+  // Abre la app RAWBT con su UI
+  window.open(url, "_system");
+};
+
+
 
   // =============================
   // IMPRESIÓN NAVEGADOR (Admin)

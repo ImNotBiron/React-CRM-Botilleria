@@ -1,30 +1,37 @@
 import axios from "axios";
-import { useAuthStore } from "../store/authStore";
+import { Capacitor } from "@capacitor/core";
 
+const hostname = window.location.hostname;
+
+// Detecta si es ambiente local (PC)
 const isLocalhost =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1";
+  hostname === "localhost" ||
+  hostname === "127.0.0.1" ||
+  hostname.startsWith("192.168.") ||
+  hostname.startsWith("10.") ||
+  hostname.startsWith("172.");
 
-// Desarrollo en PC
-const devURL = "http://localhost:3000/api";
+// URLs
+const devURL = "http://localhost:3000/api"; // solo PC
+const prodURL = "https://botilleriaelparaiso.cl/api"; // VPS
 
-// Producción real (VPS)
-const prodURL = "https://botilleriaelparaiso.cl/api";
+let API_URL = prodURL;
 
-// Android, iOS, tablets, web — TODO usa este dominio en producción
-export const API_URL = isLocalhost ? devURL : prodURL;
+// Si estamos en navegador y no es prod → dev
+if (isLocalhost && !Capacitor.isNativePlatform()) {
+  API_URL = devURL;
+}
+
+// Si estamos en Android nativo → usar VPS SIEMPRE
+if (Capacitor.isNativePlatform()) {
+  API_URL = prodURL;
+}
+
+console.log("🌐 API seleccionada:", API_URL);
 
 const axiosClient = axios.create({
   baseURL: API_URL,
-  withCredentials: true,
-});
-
-axiosClient.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  withCredentials: false,
 });
 
 export default axiosClient;
