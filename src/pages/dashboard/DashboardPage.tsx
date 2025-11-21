@@ -147,7 +147,7 @@ export default function DashboardPage() {
   };
 
   // --- ACCIÓN: VER TODAS (LISTA) ---
-  const handleVerTodas = async (idVendedor: number, nombre: string) => {
+  const handleVerTodas = async (_idVendedor: number, nombre: string) => {
       // Reutilizamos el endpoint de historial filtrando en el cliente (o idealmente en backend)
       // Para hacerlo simple y rápido, filtramos las ventas globales que ya cargamos si coinciden con el vendedor
       // Si no, habría que llamar a la API. Como ya tenemos ventas de HOY, filtramos de ahí.

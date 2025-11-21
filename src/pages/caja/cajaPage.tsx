@@ -31,7 +31,6 @@ import {
   IconLockOpen,
   IconLock,
   IconCash,
-  IconCreditCard,
   IconCalculator,
   IconTrendingDown,
   IconCirclePlus,

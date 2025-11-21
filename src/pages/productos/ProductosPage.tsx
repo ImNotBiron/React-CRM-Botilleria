@@ -23,9 +23,6 @@ import {
   FormControl,
   InputLabel,
   Tooltip,
-  Chip,
-  Divider,
-  Alert // Importamos Alert para el mensaje dentro del modal
 } from "@mui/material";
 
 import {
@@ -37,7 +34,6 @@ import {
   IconAlertTriangle // Icono de advertencia
 } from "@tabler/icons-react";
 
-import { useThemeStore } from "../../store/themeStore";
 import { productosApi } from "../../api/productosApi";
 import { categoriasApi } from "../../api/categoriasApi";
 import { proveedoresApi } from "../../api/proveedoresApi";
@@ -50,8 +46,6 @@ const formatCLP = (value: number) =>
   }).format(value);
 
 export default function ProductosPage() {
-  const mode = useThemeStore((s) => s.mode);
-
   // Datos
   const [productos, setProductos] = useState<any[]>([]);
   const [busqueda, setBusqueda] = useState("");
