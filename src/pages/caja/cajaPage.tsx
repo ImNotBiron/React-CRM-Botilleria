@@ -31,19 +31,29 @@ import {
   IconLockOpen,
   IconLock,
   IconCash,
+  IconCreditCard,
   IconCalculator,
   IconTrendingDown,
   IconCirclePlus,
   IconArrowUp,
   IconArrowDown,
-  IconHistory
+  IconHistory,
+  IconShoppingCart,
+  IconUserDollar // Nuevo Icono
 } from "@tabler/icons-react";
 
 import { cajaApi } from "../../api/cajaApi";
 import { useAuthStore } from "../../store/authStore";
+import InternalSaleModal from "./InternalSaleModal"; // ✅ IMPORTADO
 
 const formatCLP = (val: number) => 
   new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP" }).format(val);
+
+const TipoMovimientoChip = ({ tipo }: { tipo: string }) => {
+  if (tipo === 'VENTA') return <Chip icon={<IconShoppingCart size={16}/>} label="Venta" color="primary" size="small" variant="outlined" sx={{fontWeight:'bold'}} />;
+  if (tipo === 'INGRESO') return <Chip icon={<IconArrowUp size={16}/>} label="Ingreso Extra" color="success" size="small" variant="outlined" sx={{fontWeight:'bold'}} />;
+  return <Chip icon={<IconArrowDown size={16}/>} label="Egreso/Gasto" color="error" size="small" variant="outlined" sx={{fontWeight:'bold'}} />;
+};
 
 export default function CajaAdminPage() {
   const theme = useTheme();
@@ -62,6 +72,9 @@ export default function CajaAdminPage() {
 
   const [openCierreModal, setOpenCierreModal] = useState(false);
   const [openMovModal, setOpenMovModal] = useState(false);
+  
+  // ✅ NUEVO ESTADO
+  const [openInternalModal, setOpenInternalModal] = useState(false);
 
   const [alerta, setAlerta] = useState({
     open: false,
@@ -73,8 +86,9 @@ export default function CajaAdminPage() {
     setAlerta({ open: true, mensaje, tipo });
   };
 
-  const cargarEstado = async () => {
-    setLoading(true);
+  // Carga con polling silencioso
+  const cargarEstado = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       const res = await cajaApi.getEstado();
       setEstadoCaja(res.estado);
@@ -82,18 +96,18 @@ export default function CajaAdminPage() {
         setDatosCaja(res.datos);
       }
     } catch (error) {
-      console.error(error);
-      mostrarAlerta("Error al conectar con el servidor", "error");
+      if (!isRefresh) mostrarAlerta("Error al conectar", "error");
     } finally {
-      setLoading(false);
+      if (!isRefresh) setLoading(false);
     }
   };
 
   useEffect(() => {
     cargarEstado();
+    const interval = setInterval(() => { if (!document.hidden) cargarEstado(true); }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  // --- ACCIONES ---
   const handleAbrirCaja = async () => {
     const monto = parseInt(montoInicial);
     if (isNaN(monto) || monto < 0) return mostrarAlerta("Ingrese un monto válido", "warning");
@@ -142,10 +156,7 @@ export default function CajaAdminPage() {
       await cajaApi.cerrar({
         id_caja: datosCaja.id,
         monto_final_real: montoReal,
-        totales_sistema: {
-            ...datosCaja,
-            total_esperado_cajon: datosCaja.total_esperado_cajon
-        }
+        totales_sistema: { ...datosCaja, total_esperado_cajon: datosCaja.total_esperado_cajon }
       });
       mostrarAlerta("🔒 Caja Cerrada Correctamente", "success");
       setOpenCierreModal(false);
@@ -158,9 +169,6 @@ export default function CajaAdminPage() {
 
   if (loading) return <Box sx={{ width: "100%", display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>;
 
-  // =======================================================
-  // VISTA 1: CAJA CERRADA
-  // =======================================================
   if (estadoCaja === "cerrada") {
     return (
       <Box sx={{ width: "100%", height: "80vh", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -169,14 +177,12 @@ export default function CajaAdminPage() {
             <IconLock size={32} color={theme.palette.text.secondary} />
           </Box>
           <Typography variant="h5" fontWeight={700} gutterBottom>Turno Cerrado</Typography>
-          <Typography variant="body2" color="text.secondary" mb={4} sx={{ px: 2 }}>Para comenzar a vender, ingrese el fondo inicial.</Typography>
           <TextField 
             label="Monto Inicial" fullWidth type="tel"
             value={montoInicial ? parseInt(montoInicial).toLocaleString("es-CL") : ""}
             onChange={(e) => setMontoInicial(e.target.value.replace(/\D/g, ""))}
             InputProps={{ startAdornment: <Typography mr={1} fontWeight={500} color="text.secondary">$</Typography>, sx: { borderRadius: 3, fontSize: '1.1rem', fontWeight: 500, textAlign: 'center' } }}
-            inputProps={{ style: { textAlign: 'center' } }}
-            sx={{ mb: 3 }} autoFocus
+            inputProps={{ style: { textAlign: 'center' } }} sx={{ mb: 3 }} autoFocus
           />
           <Button variant="contained" fullWidth size="large" startIcon={<IconLockOpen size={20} />} onClick={handleAbrirCaja} sx={{ borderRadius: 3, py: 1.5, fontWeight: 700, fontSize: '0.95rem', bgcolor: '#695cfe', '&:hover': { bgcolor: '#5a4ee3' } }}>
             ABRIR TURNO
@@ -188,11 +194,6 @@ export default function CajaAdminPage() {
       </Box>
     );
   }
-
-  // =======================================================
-  // VISTA 2: CAJA ABIERTA
-  // =======================================================
-  const diferencia = (parseInt(montoCierre) || 0) - (datosCaja?.total_esperado_cajon || 0);
   
   return (
     <Box sx={{ width: "100%" }}>
@@ -203,45 +204,58 @@ export default function CajaAdminPage() {
             <Typography variant="body2" color="text.secondary">Inicio: {new Date(datosCaja.fecha_apertura).toLocaleTimeString()}</Typography>
         </Box>
         <Box display="flex" gap={2}>
-            <Button variant="outlined" startIcon={<IconCirclePlus size={20} />} onClick={() => setOpenMovModal(true)} sx={{ fontWeight: 600, borderRadius: 2, border: '1px solid', textTransform: 'none', px: 2 }}>
-                Registrar Gasto
+            {/* ✅ BOTÓN VENTA INTERNA */}
+            <Button 
+                variant="contained" 
+                color="warning" 
+                startIcon={<IconUserDollar size={20} />}
+                onClick={() => setOpenInternalModal(true)}
+                sx={{ fontWeight: 600, borderRadius: 2, px: 2, boxShadow: 'none' }}
+            >
+                Venta Interna
             </Button>
-            <Button variant="contained" color="error" startIcon={<IconLock size={20} />} onClick={() => setOpenCierreModal(true)} sx={{ fontWeight: 600, borderRadius: 2, px: 3, boxShadow: 'none' }}>
+
+            <Button 
+                variant="outlined" 
+                startIcon={<IconCirclePlus size={20} />}
+                onClick={() => setOpenMovModal(true)}
+                sx={{ fontWeight: 600, borderRadius: 2, border: '1px solid', textTransform: 'none', px: 2 }}
+            >
+                Gasto / Ingreso
+            </Button>
+            
+            <Button 
+                variant="contained" 
+                color="error" 
+                startIcon={<IconLock size={20} />} 
+                onClick={() => setOpenCierreModal(true)}
+                sx={{ fontWeight: 600, borderRadius: 2, px: 3, boxShadow: 'none' }}
+            >
                 CERRAR TURNO
             </Button>
         </Box>
       </Box>
 
-      {/* DASHBOARD GRID */}
       <Box sx={{ display: 'grid', width: "100%", gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', lg: '1fr 1fr 1fr 1fr' }, gap: 3, mb: 4 }}>
-        
+        {/* ... Tarjetas de resumen igual que antes ... */}
         <Card sx={{ borderRadius: 4, boxShadow: 1 }}>
           <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="caption" color="text.secondary" fontWeight={600}>FONDO INICIAL</Typography>
               <Typography variant="h5" fontWeight={700} mt={0.5} color="text.primary">{formatCLP(datosCaja.monto_inicial)}</Typography>
           </CardContent>
         </Card>
-
         <Card sx={{ borderRadius: 4, bgcolor: "#e8f5e9", color: "#1b5e20", boxShadow: 'none', border: '1px solid #c8e6c9' }}>
           <CardContent sx={{ textAlign: 'center' }}>
-              <Box display="flex" alignItems="center" justifyContent="center" gap={1} mb={0.5}>
-                 <IconCash size={18} opacity={0.7} />
-                 <Typography variant="subtitle2" fontWeight={700} sx={{opacity: 0.8}}>VENTAS EFECTIVO</Typography>
-              </Box>
+              <Box display="flex" alignItems="center" justifyContent="center" gap={1} mb={0.5}><IconCash size={20} opacity={0.7} /><Typography variant="subtitle2" fontWeight={700} sx={{opacity: 0.8}}>VENTAS EFECTIVO</Typography></Box>
               <Typography variant="h5" fontWeight={700}>{formatCLP(datosCaja.ventas_efectivo)}</Typography>
           </CardContent>
         </Card>
-
         <Card sx={{ borderRadius: 4, bgcolor: "#ffebee", color: "#b71c1c", boxShadow: 'none', border: '1px solid #ffcdd2' }}>
           <CardContent sx={{ textAlign: 'center' }}>
-              <Box display="flex" alignItems="center" justifyContent="center" gap={1} mb={0.5}>
-                 <IconTrendingDown size={18} opacity={0.7} />
-                 <Typography variant="subtitle2" fontWeight={700} sx={{opacity: 0.8}}>GASTOS / RETIROS</Typography>
-              </Box>
+              <Box display="flex" alignItems="center" justifyContent="center" gap={1} mb={0.5}><IconTrendingDown size={20} opacity={0.7} /><Typography variant="subtitle2" fontWeight={700} sx={{opacity: 0.8}}>GASTOS / RETIROS</Typography></Box>
               <Typography variant="h5" fontWeight={700}>- {formatCLP(datosCaja.egresos)}</Typography>
           </CardContent>
         </Card>
-
         <Card sx={{ borderRadius: 4, border: '2px solid #4caf50', bgcolor: theme.palette.background.paper }}>
           <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="subtitle2" color="success.main" fontWeight={800}>DEBE HABER EN CAJÓN</Typography>
@@ -249,57 +263,48 @@ export default function CajaAdminPage() {
               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block', mt: 0.5 }}>(Fondo + Ventas - Gastos)</Typography>
           </CardContent>
         </Card>
-
       </Box>
 
-      {/* ✅ NUEVA SECCIÓN: TABLA DE MOVIMIENTOS */}
-      <Paper sx={{ borderRadius: 4, overflow: 'hidden', width: '100%' }}>
+      {/* TABLA DE MOVIMIENTOS */}
+      <Paper sx={{ borderRadius: 4, overflow: 'hidden', width: '100%', mt: 4 }}>
           <Box sx={{ p: 2, bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8f9fa', borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
               <IconHistory size={20} color="gray" />
-              <Typography variant="subtitle1" fontWeight={700}>Historial de Movimientos (Egresos/Ingresos)</Typography>
+              <Typography variant="subtitle1" fontWeight={700}>Flujo de Efectivo (Ventas + Movimientos)</Typography>
           </Box>
           <Table>
               <TableHead sx={{ bgcolor: 'background.paper' }}>
                   <TableRow>
                       <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Hora</TableCell>
                       <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Tipo</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Motivo</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Detalle</TableCell>
                       <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Usuario</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 600, color: 'text.secondary' }}>Monto</TableCell>
                   </TableRow>
               </TableHead>
               <TableBody>
                   {datosCaja.lista_movimientos?.length > 0 ? (
-                      datosCaja.lista_movimientos.map((m: any) => (
-                          <TableRow key={m.id} hover>
+                      datosCaja.lista_movimientos.map((m: any, index: number) => (
+                          <TableRow key={index} hover>
                               <TableCell>{new Date(m.fecha).toLocaleTimeString()}</TableCell>
-                              <TableCell>
-                                  {m.tipo === 'INGRESO' 
-                                    ? <Chip icon={<IconArrowUp size={16}/>} label="Ingreso" color="success" size="small" variant="outlined" sx={{fontWeight:'bold'}} />
-                                    : <Chip icon={<IconArrowDown size={16}/>} label="Egreso" color="error" size="small" variant="outlined" sx={{fontWeight:'bold'}} />
-                                  }
-                              </TableCell>
+                              <TableCell><TipoMovimientoChip tipo={m.tipo} /></TableCell>
                               <TableCell>{m.comentario}</TableCell>
                               <TableCell sx={{ textTransform: 'capitalize' }}>{m.nombre_usuario || 'Admin'}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 'bold', color: m.tipo === 'INGRESO' ? 'success.main' : 'error.main' }}>
+                              <TableCell align="right" sx={{ fontWeight: 'bold', color: m.tipo === 'EGRESO' ? 'error.main' : 'success.main' }}>
                                   {m.tipo === 'EGRESO' ? '- ' : '+ '}{formatCLP(m.monto)}
                               </TableCell>
                           </TableRow>
                       ))
                   ) : (
-                      <TableRow>
-                          <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                              No hay movimientos registrados en este turno.
-                          </TableCell>
-                      </TableRow>
+                      <TableRow><TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>No hay movimientos registrados.</TableCell></TableRow>
                   )}
               </TableBody>
           </Table>
       </Paper>
 
-      {/* MODALES Y SNACKBAR (IGUAL QUE ANTES) */}
+      {/* Modales anteriores */}
       <Dialog open={openMovModal} onClose={() => setOpenMovModal(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, p: 1 } }}>
-        <DialogTitle fontWeight={700} textAlign="center" fontSize="1.1rem">Registrar Movimiento</DialogTitle>
+        {/* ... contenido modal gasto ... */}
+        <DialogTitle fontWeight={700} textAlign="center">Registrar Movimiento</DialogTitle>
         <DialogContent>
             <Box display="flex" flexDirection="column" gap={3} mt={1}>
                 <FormControl fullWidth>
@@ -309,50 +314,39 @@ export default function CajaAdminPage() {
                         <MenuItem value="INGRESO">🔺 INGRESO (Extra)</MenuItem>
                     </Select>
                 </FormControl>
-                <TextField 
-                    label="Monto" fullWidth type="tel" 
-                    value={movMonto ? parseInt(movMonto).toLocaleString("es-CL") : ""}
-                    onChange={(e) => setMovMonto(e.target.value.replace(/\D/g, ""))}
-                    InputProps={{ startAdornment: <Typography mr={1} fontWeight="bold">$</Typography>, sx: { borderRadius: 3, fontSize: '1.1rem', fontWeight: 'bold' } }}
-                />
-                <TextField label="Motivo" fullWidth multiline rows={2} value={movComentario} onChange={(e) => setMovComentario(e.target.value)} placeholder="Ej: Compra de hielo, Colación..." InputProps={{ sx: { borderRadius: 3 } }} />
+                <TextField label="Monto" fullWidth type="tel" value={movMonto} onChange={(e) => setMovMonto(e.target.value.replace(/\D/g, ""))} InputProps={{ startAdornment: <Typography mr={1} fontWeight="bold">$</Typography> }} />
+                <TextField label="Motivo" fullWidth multiline rows={2} value={movComentario} onChange={(e) => setMovComentario(e.target.value)} />
             </Box>
         </DialogContent>
         <DialogActions sx={{ p: 2, justifyContent: 'center' }}>
-            <Button onClick={() => setOpenMovModal(false)} color="inherit" sx={{ borderRadius: 2 }}>Cancelar</Button>
-            <Button variant="contained" onClick={handleRegistrarMovimiento} sx={{ borderRadius: 2, px: 3, fontWeight: 600 }}>Guardar</Button>
+            <Button onClick={() => setOpenMovModal(false)}>Cancelar</Button>
+            <Button variant="contained" onClick={handleRegistrarMovimiento}>Guardar</Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={openCierreModal} onClose={() => setOpenCierreModal(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4, p: 1 } }}>
-        <DialogTitle sx={{ fontWeight: 700, textAlign: "center", fontSize: '1.3rem' }}>Arqueo de Caja</DialogTitle>
+        {/* ... contenido modal cierre ... */}
+        <DialogTitle fontWeight={700} textAlign="center">Arqueo de Caja</DialogTitle>
         <DialogContent>
-            <Box sx={{ textAlign: "center", py: 2 }}>
-                <Typography variant="body2" mb={1} color="text.secondary" fontWeight={500}>El sistema calcula que debe haber:</Typography>
-                <Typography variant="h3" fontWeight={700} color="primary.main" mb={4} sx={{ letterSpacing: -0.5 }}>{formatCLP(datosCaja.total_esperado_cajon)}</Typography>
-                <Divider sx={{ mb: 4 }}><Chip label="CONTEO REAL" sx={{ fontWeight: 700, fontSize: '0.75rem' }} size="small" /></Divider>
-                <TextField 
-                    label="¿Cuánto dinero contaste?" fullWidth type="tel"
-                    value={montoCierre ? parseInt(montoCierre).toLocaleString("es-CL") : ""}
-                    onChange={(e) => setMontoCierre(e.target.value.replace(/\D/g, ""))}
-                    InputProps={{ startAdornment: <IconCalculator size={22} style={{marginRight: 8, opacity: 0.5}} />, sx: { fontSize: '1.3rem', fontWeight: 600, borderRadius: 3, textAlign: 'center' } }}
-                    inputProps={{ style: { textAlign: 'center' } }}
-                    helperText="Ingresa el total de billetes y monedas" autoFocus
-                />
-                {montoCierre !== "" && (
-                    <Alert severity={diferencia === 0 ? "success" : diferencia > 0 ? "info" : "error"} variant="filled" sx={{ mt: 3, justifyContent: "center", borderRadius: 3, boxShadow: 2 }}>
-                        <Typography fontWeight={700} fontSize="1rem">
-                            {diferencia === 0 ? "✨ ¡CAJA CUADRADA PERFECTA! ✨" : diferencia > 0 ? `SOBRAN ${formatCLP(diferencia)}` : `FALTAN ${formatCLP(Math.abs(diferencia))} 😱`}
-                        </Typography>
-                    </Alert>
-                )}
-            </Box>
+             {/* ... inputs cierre ... */}
+             <Box sx={{ textAlign: "center", py: 2 }}>
+                <Typography variant="body1">Sistema:</Typography>
+                <Typography variant="h4" fontWeight={800} color="primary" mb={3}>{formatCLP(datosCaja.total_esperado_cajon)}</Typography>
+                <TextField label="Conteo Real" fullWidth type="tel" value={montoCierre} onChange={(e) => setMontoCierre(e.target.value.replace(/\D/g, ""))} InputProps={{ startAdornment: <IconCalculator size={20} style={{marginRight:8}}/> }} />
+             </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 3, justifyContent: "center", gap: 2 }}>
-            <Button onClick={() => setOpenCierreModal(false)} color="inherit" size="large" sx={{ fontWeight: 600 }}>Cancelar</Button>
-            <Button variant="contained" color="error" size="large" onClick={handleConfirmarCierre} disabled={montoCierre === ""} sx={{ borderRadius: 3, px: 3, py: 1, fontWeight: 700 }}>CONFIRMAR CIERRE</Button>
+        <DialogActions sx={{ p: 3, justifyContent: 'center' }}>
+            <Button onClick={() => setOpenCierreModal(false)}>Cancelar</Button>
+            <Button variant="contained" color="error" onClick={handleConfirmarCierre} disabled={!montoCierre}>Confirmar</Button>
         </DialogActions>
       </Dialog>
+
+      {/* ✅ NUEVO MODAL: VENTA INTERNA */}
+      <InternalSaleModal 
+        open={openInternalModal} 
+        onClose={() => setOpenInternalModal(false)} 
+        onSuccess={() => cargarEstado(true)} 
+      />
 
       <Snackbar open={alerta.open} autoHideDuration={4000} onClose={() => setAlerta({...alerta, open: false})} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert severity={alerta.tipo} variant="filled" sx={{ width: '100%', fontWeight: 600, boxShadow: 4 }}>{alerta.mensaje}</Alert>

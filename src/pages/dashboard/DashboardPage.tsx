@@ -23,16 +23,18 @@ import {
 import {
   IconCash,
   IconShoppingCart,
+  IconTrendingUp,
   IconUser,
-  IconReceipt
+  IconReceipt,
+  IconAlertCircle,
+  IconCheck
 } from "@tabler/icons-react";
 
 import { cajaApi } from "../../api/cajaApi";
 import { ventasApi } from "../../api/ventasApi"; 
 import { useAuthStore } from "../../store/authStore";
-import { VoucherModal } from "../carrito/VoucherModal"; // Reutilizamos el voucher
+import { VoucherModal } from "../carrito/VoucherModal"; 
 
-// Componente Luz de Estado
 const StatusLight = ({ active }: { active: boolean }) => (
   <Box
     sx={{
@@ -59,19 +61,23 @@ export default function DashboardPage() {
   const [estadoCaja, setEstadoCaja] = useState<"abierta" | "cerrada">("cerrada");
   const [resumenVentas, setResumenVentas] = useState({ total: 0, count: 0 });
   
-  // ✅ ESTADOS NUEVOS PARA VENDEDORES
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [cajaAbiertaFlag, setCajaAbiertaFlag] = useState(false);
 
-  // Modales de Acción
+  // ✅ ESTADOS PARA BOLETEAR
+  const [ventasPorBoletear, setVentasPorBoletear] = useState<any[]>([]);
+  const [openModalBoletear, setOpenModalBoletear] = useState(false);
+
+  // Modales
   const [openVoucher, setOpenVoucher] = useState(false);
   const [datosVoucher, setDatosVoucher] = useState<any>(null);
   
   const [openList, setOpenList] = useState(false);
-  const [ventasVendedor, setVentasVendedor] = useState<any[]>([]); // Lista simple
+  const [ventasVendedor, setVentasVendedor] = useState<any[]>([]); 
   const [vendedorSeleccionado, setVendedorSeleccionado] = useState("");
 
-  const cargarDatos = async () => {
+  const cargarDatos = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       // 1. Estado Caja
       const resCaja = await cajaApi.getEstado();
@@ -87,7 +93,7 @@ export default function DashboardPage() {
           console.warn("Error cargando ventas globales", err);
       }
 
-      // 3. Resumen Vendedores (Nuevo Endpoint)
+      // 3. Resumen Vendedores
       try {
           const resVend = await ventasApi.getResumenVendedores();
           setVendedores(resVend.vendedores);
@@ -96,24 +102,40 @@ export default function DashboardPage() {
           console.warn("Error cargando vendedores", err);
       }
 
+      // ✅ CARGAR PENDIENTES DE BOLETEAR
+      try {
+        const pendientes = await ventasApi.getPorBoletear();
+        setVentasPorBoletear(pendientes);
+      } catch (err) {
+        console.warn("Error cargando pendientes boletear");
+      }
+
     } catch (error) {
       console.error("Error general dashboard", error);
     } finally {
-      setLoading(false);
+      if (!isRefresh) setLoading(false);
     }
   };
 
+  // ✅ POLLING INTELIGENTE: Actualizar cada 10 segundos
   useEffect(() => {
-    cargarDatos();
+    cargarDatos(); // Carga inicial
+
+    const intervalId = setInterval(() => {
+        // Solo recargamos si la pestaña está visible para no gastar recursos en vano
+        if (!document.hidden) {
+            cargarDatos(true); // true = modo refresco silencioso
+        }
+    }, 7000); // 7 segundos
+
+    return () => clearInterval(intervalId);
   }, []);
 
-  // --- ACCIÓN: VER ÚLTIMA VENTA (VOUCHER) ---
   const handleVerUltima = async (lastId: number) => {
       if (!lastId) return alert("Este vendedor no ha realizado ventas en este turno.");
       try {
           const venta = await ventasApi.getById(lastId);
           
-          // Reconstruir estructura para VoucherModal
           let items = [];
           let pagos = [];
           if (venta.json_voucher) {
@@ -146,28 +168,27 @@ export default function DashboardPage() {
       }
   };
 
-  // --- ACCIÓN: VER TODAS (LISTA) ---
-  const handleVerTodas = async (_idVendedor: number, nombre: string) => {
-      // Reutilizamos el endpoint de historial filtrando en el cliente (o idealmente en backend)
-      // Para hacerlo simple y rápido, filtramos las ventas globales que ya cargamos si coinciden con el vendedor
-      // Si no, habría que llamar a la API. Como ya tenemos ventas de HOY, filtramos de ahí.
-      
-      // 1. Traer ventas del día (ya las tenemos en caché o volvemos a pedir para asegurar)
+  // ✅ CORREGIDO: Se eliminó el argumento 'idVendedor' que no se usaba
+  const handleVerTodas = async (nombre: string) => {
       const hoy = new Date().toISOString().split('T')[0];
-      const todasLasVentas = await ventasApi.getAll(hoy, hoy);
-      
-      // 2. Filtrar por vendedor (El backend getAll devuelve nombre vendedor, no ID, hay que tener ojo)
-      // El backend getHistorialVentas devuelve 'vendedor' (string). 
-      // Para ser precisos, mejor sería que devolviera id_usuario. 
-      // Asumiremos filtro por nombre por ahora.
-      
-      const misVentas = todasLasVentas.filter((v: any) => v.vendedor === nombre);
-      
-      setVentasVendedor(misVentas);
-      setVendedorSeleccionado(nombre);
-      setOpenList(true);
+      try {
+        const todasLasVentas = await ventasApi.getAll(hoy, hoy);
+        const misVentas = todasLasVentas.filter((v: any) => v.vendedor === nombre);
+        
+        setVentasVendedor(misVentas);
+        setVendedorSeleccionado(nombre);
+        setOpenList(true);
+      } catch (error) {
+          console.error(error);
+      }
   };
 
+  // ✅ ACCIÓN MARCAR COMO BOLETEADO
+  const handleMarcarListo = async (idVenta: number) => {
+    await ventasApi.marcarBoleteado(idVenta);
+    // Actualizamos la lista localmente para que desaparezca rápido
+    setVentasPorBoletear(prev => prev.filter(v => v.id !== idVenta));
+  };
 
   if (loading) {
     return (
@@ -206,6 +227,23 @@ export default function DashboardPage() {
         </Paper>
       </Box>
 
+      {/* ✅ ALERTA DE VENTAS SIN BOLETEAR (SI HAY) */}
+      {ventasPorBoletear.length > 0 && (
+          <Alert 
+            severity="warning" 
+            variant="filled" 
+            icon={<IconAlertCircle size={24} />}
+            action={
+                <Button color="inherit" size="small" sx={{ fontWeight: 700, bgcolor: 'rgba(0,0,0,0.1)' }} onClick={() => setOpenModalBoletear(true)}>
+                    DECLARAR AHORA
+                </Button>
+            }
+            sx={{ mb: 4, borderRadius: 3, alignItems: 'center', fontWeight: 600, boxShadow: 3 }}
+          >
+              Tienes {ventasPorBoletear.length} ventas en efectivo pendientes de declarar (boletear).
+          </Alert>
+      )}
+
       {/* KPIs GENERALES */}
       <Box sx={{ display: "grid", width: "100%", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3, mb: 4 }}>
         <Card sx={{ borderRadius: 4, position: 'relative', overflow: 'visible' }}>
@@ -240,10 +278,20 @@ export default function DashboardPage() {
                 <Card key={v.id} sx={{ borderRadius: 4, border: '1px solid', borderColor: 'divider', transition: '0.3s', '&:hover': { boxShadow: 4 } }}>
                     <CardContent>
                         <Box display="flex" alignItems="center" mb={2}>
-                            <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>{v.nombre_usuario[0]}</Avatar>
+                            <Avatar sx={{ bgcolor: v.en_linea ? 'primary.main' : 'grey.400', mr: 2 }}>
+                                {v.nombre_usuario[0]}
+                            </Avatar>
                             <Box>
-                                <Typography fontWeight={700}>{v.nombre_usuario}</Typography>
-                                <Chip label="En Línea" size="small" color="success" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 'bold' }} />
+                                <Typography fontWeight={700} color={v.en_linea ? 'text.primary' : 'text.disabled'}>
+                                    {v.nombre_usuario}
+                                </Typography>
+                                
+                                {/* ✅ CHIP DINÁMICO "EN LÍNEA" / "OFFLINE" */}
+                                {v.en_linea === 1 ? (
+                                    <Chip label="En Línea" size="small" color="success" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 'bold' }} />
+                                ) : (
+                                    <Chip label="Desconectado" size="small" sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'action.disabledBackground' }} />
+                                )}
                             </Box>
                         </Box>
                         
@@ -264,7 +312,8 @@ export default function DashboardPage() {
                                 size="small" 
                                 fullWidth 
                                 sx={{ borderRadius: 2 }}
-                                onClick={() => handleVerTodas(v.id, v.nombre_usuario)}
+                                // ✅ Se eliminó el primer argumento 'id' que no se usaba
+                                onClick={() => handleVerTodas(v.nombre_usuario)} 
                             >
                                 Ver Todas
                             </Button>
@@ -283,23 +332,21 @@ export default function DashboardPage() {
                 </Card>
             ))}
             {vendedores.length === 0 && (
-                <Typography color="text.secondary" sx={{ fontStyle: 'italic' }}>No hay vendedores activos registrados.</Typography>
+                <Typography color="text.secondary" sx={{ fontStyle: 'italic' }}>No hay vendedores registrados.</Typography>
             )}
           </Box>
       ) : (
-          <Alert severity="info" variant="outlined" sx={{ borderRadius: 3 }}>
-              La caja está cerrada. No hay métricas de turno en tiempo real.
-          </Alert>
+          <Box p={3} textAlign="center" bgcolor="background.paper" borderRadius={4} border="1px dashed gray">
+              <Typography color="text.secondary">La caja está cerrada. Abra un turno para ver el estado del equipo.</Typography>
+          </Box>
       )}
 
-      {/* MODAL VOUCHER (Para "Ver Última") */}
       <VoucherModal 
         open={openVoucher} 
         onClose={() => setOpenVoucher(false)} 
         datosVenta={datosVoucher} 
       />
 
-      {/* MODAL LISTA (Para "Ver Todas") */}
       <Dialog open={openList} onClose={() => setOpenList(false)} maxWidth="xs" fullWidth>
         <DialogTitle fontWeight={700}>Ventas de {vendedorSeleccionado}</DialogTitle>
         <DialogContent dividers sx={{ p: 0 }}>
@@ -324,6 +371,40 @@ export default function DashboardPage() {
         </DialogContent>
         <Box p={2} textAlign="center">
             <Button onClick={() => setOpenList(false)}>Cerrar</Button>
+        </Box>
+      </Dialog>
+
+      {/* ✅ MODAL DECLARAR BOLETAS */}
+      <Dialog open={openModalBoletear} onClose={() => setOpenModalBoletear(false)} maxWidth="sm" fullWidth>
+        <DialogTitle fontWeight={700}>Ventas por Boletear (Efectivo)</DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+            <List>
+                {ventasPorBoletear.map((v) => (
+                    <ListItem key={v.id} divider>
+                        <ListItemText 
+                            primary={`Folio #${v.id} - ${formatCLP(v.total_general)}`}
+                            secondary={`${new Date(v.fecha).toLocaleString()} - Vend: ${v.vendedor}`}
+                        />
+                        <Button 
+                            variant="outlined" 
+                            color="success" 
+                            startIcon={<IconCheck size={18} />}
+                            onClick={() => handleMarcarListo(v.id)}
+                            size="small"
+                        >
+                            Listo
+                        </Button>
+                    </ListItem>
+                ))}
+                {ventasPorBoletear.length === 0 && (
+                    <Box p={4} textAlign="center">
+                        <Typography color="text.secondary">¡Todo al día! No hay ventas pendientes.</Typography>
+                    </Box>
+                )}
+            </List>
+        </DialogContent>
+        <Box p={2} textAlign="right">
+            <Button onClick={() => setOpenModalBoletear(false)}>Cerrar</Button>
         </Box>
       </Dialog>
 

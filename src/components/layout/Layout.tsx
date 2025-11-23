@@ -232,7 +232,7 @@ export default function Layout() {
         >
           <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
             <Typography variant="h6" fontWeight={600} sx={{ color: "#695cfe" }}>
-              CRM Botillería
+              ERP Botillería
             </Typography>
 
             <Box sx={{ display: "flex", alignItems: "center" }}>
